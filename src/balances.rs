@@ -33,7 +33,7 @@ fn zigzag_encode(n: i64) -> u64 {
     ((n << 1) ^ (n >> 63)) as u64
 }
 
-fn write_varint(mut val: u64, buf: &mut Vec<u8>) {
+pub(super) fn write_varint(mut val: u64, buf: &mut Vec<u8>) {
     loop {
         if val < 0x80 {
             buf.push(val as u8);
@@ -137,7 +137,7 @@ fn zigzag_decode(n: u64) -> i64 {
 }
 
 #[inline]
-fn read_varint(buf: &[u8], cursor: &mut usize) -> u64 {
+pub(super) fn read_varint(buf: &[u8], cursor: &mut usize) -> u64 {
     let mut val = 0u64;
     let mut shift = 0u32;
 
