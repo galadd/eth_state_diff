@@ -20,6 +20,51 @@ pub struct BalanceDiffs {
     pub appended_balances: Vec<u64>,
 }
 
+/// Compact delta encoding for participation flags.
+///
+/// A participation delta stores only the information required to transform one
+/// participation vector into another.
+///
+/// The encoder automatically selects the most compact representation:
+///
+/// - [`ParticipationDiff::AllZeros`] when the target vector contains only
+///   zero-valued flags.
+/// - [`ParticipationDiff::Sparse`] when only a subset of indices change.
+///
+/// This type is intended to be serialized using `rkyv`.
+#[derive(Archive, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub enum ParticipationDiff {
+    /// Represents a participation vector consisting entirely of zeros.
+    ///
+    /// During reconstruction the destination vector is resized to `len`
+    /// and every entry is set to `0`.
+    AllZeros(usize),
+
+    /// Sparse delta representation.
+    ///
+    /// Only indices whose values differ from the base vector are stored.
+    ///
+    /// Changed indices are encoded as delta-varint gaps to reduce storage
+    /// requirements for sparsely changing participation flags.
+    Sparse {
+        /// Delta-varint encoded gaps between successive modified indices.
+        ///
+        /// Each decoded gap is added to the previous modified index to recover
+        /// the absolute index.
+        sparse_indices: Vec<u8>,
+
+        /// Replacement participation flags.
+        ///
+        /// Each entry corresponds one-to-one with a decoded index from
+        /// `sparse_indices`.
+        new_values: Vec<u8>,
+
+        /// Participation flags for validators that exist only in the target
+        /// vector.
+        extension: Vec<u8>,
+    },
+}
+
 #[derive(Eq, PartialEq, Debug, Clone, Default, Archive, Deserialize, Serialize)]
 pub struct BitTagVec {
     pub data: Vec<u8>, // 4 entries per byte
