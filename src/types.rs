@@ -1,5 +1,32 @@
 use rkyv::{Archive, Deserialize, Serialize};
 
+pub const VALIDATOR_SSZ_SIZE: usize = 121;
+pub const MIN_VALIDATOR_WITHDRAWABILITY_DELAY: u64 = 256;
+
+#[derive(Archive, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub enum ValidatorField {
+    WithdrawalCredentials,
+    EffectiveBalance,
+    Slashed,
+    ActivationEligibilityEpoch,
+    ActivationEpoch,
+    ExitEpoch,
+    WithdrawableEpochSlashed,
+}
+
+#[derive(Archive, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub struct ValidatorPatch {
+    pub index: u32,
+    pub field: ValidatorField,
+    pub value: Vec<u8>,
+}
+
+#[derive(Archive, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub struct ValidatorDiffs {
+    pub patches: Vec<ValidatorPatch>,
+    pub appended_validators: Vec<u8>,
+}
+
 /// Compact representation of the difference between two balance snapshots.
 ///
 /// A `BalanceDiffs` stores only the information required to transform one
