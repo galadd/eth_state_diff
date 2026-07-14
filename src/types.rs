@@ -106,6 +106,27 @@ pub struct RootsDiffs {
     pub roots: Vec<[u8; 32]>,
 }
 
+#[derive(Archive, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub struct SlashingsDiffs {
+    /// A sparse list of (index, new_slashing_amount).
+    /// Index fits in u16 (max size is 8192).
+    /// In a 32-epoch window, this Vec will have a length of 0 or 1.
+    pub updates: Vec<(u16, u64)>,
+}
+
+/// Sequence of RANDAO mixes written while advancing through epochs.
+///
+/// Mixes are stored in chronological epoch order beginning with the epoch
+/// containing the supplied base slot used during reconstruction.
+///
+/// The circular buffer capacity is intentionally omitted from the encoding, as
+/// it is determined by the destination buffer during application.
+#[derive(Archive, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub struct RandaoDiffs {
+    /// Sequential list of 32-byte randao reveals added during this window.
+    pub mixes: Vec<[u8; 32]>,
+}
+
 #[derive(Eq, PartialEq, Debug, Clone, Default, Archive, Deserialize, Serialize)]
 pub struct BitTagVec {
     pub data: Vec<u8>, // 4 entries per byte
