@@ -92,6 +92,20 @@ pub enum ParticipationDiff {
     },
 }
 
+/// Sequence of roots written while advancing a circular root buffer.
+///
+/// Roots are stored in chronological slot order beginning at the supplied
+/// base slot used during reconstruction.
+///
+/// The buffer capacity is intentionally omitted from the encoding since it is
+/// determined by the destination buffer.
+#[derive(Archive, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub struct RootsDiffs {
+    /// Sequential list of 32-byte hashes added to the circular buffer
+    /// between the base slot and target slot.
+    pub roots: Vec<[u8; 32]>,
+}
+
 #[derive(Eq, PartialEq, Debug, Clone, Default, Archive, Deserialize, Serialize)]
 pub struct BitTagVec {
     pub data: Vec<u8>, // 4 entries per byte
