@@ -106,6 +106,12 @@ pub struct RootsDiffs {
     pub roots: Vec<[u8; 32]>,
 }
 
+/// Sparse updates for a slashing ring buffer.
+///
+/// Each update stores the destination ring index together with its new slashing
+/// value.
+///
+/// Only epochs whose values changed are included.
 #[derive(Archive, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct SlashingsDiffs {
     /// A sparse list of (index, new_slashing_amount).
