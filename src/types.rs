@@ -92,6 +92,34 @@ pub enum ParticipationDiff {
     },
 }
 
+/// Compact representation of the difference between two inactivity-score
+/// vectors.
+///
+/// The encoder automatically selects the most compact representation:
+///
+/// - [`InactivityDiffs::AllZeros`] when the target vector contains only zero
+///   scores.
+/// - [`InactivityDiffs::Sparse`] when only a subset of scores change.
+#[derive(Archive, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub enum InactivityDiffs {
+    /// Fast path for the 99.9% case where no scores change in the overlapping set.
+    AllZeros(u32),
+
+    /// Sparse inactivity-score updates.
+    ///
+    /// Only modified indices are stored.
+    Sparse {
+        /// Indices of modified inactivity scores.
+        indices: Vec<u32>,
+
+        /// Replacement scores corresponding one-to-one with `indices`.
+        new_values: Vec<u64>,
+
+        /// Scores for validators appended to the target vector.
+        extensions: Vec<u64>,
+    },
+}
+
 /// Sequence of roots written while advancing a circular root buffer.
 ///
 /// Roots are stored in chronological slot order beginning at the supplied
