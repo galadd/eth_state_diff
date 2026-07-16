@@ -10,7 +10,7 @@
 //! Deltas produced by [`diff_inactivity`] can be applied in-place using
 //! [`apply_inactivity`].
 
-use crate::types::{ArchivedInactivityDiffs, InactivityDiffs};
+use crate::types::{ArchivedInactivityDiff, InactivityDiff};
 
 /// Computes a compact inactivity-score delta.
 ///
@@ -18,7 +18,7 @@ use crate::types::{ArchivedInactivityDiffs, InactivityDiffs};
 /// from `base`.
 ///
 /// If every inactivity score in the target vector is zero, the encoder emits an
-/// [`InactivityDiffs::AllZeros`] representation. Otherwise, only modified
+/// [`InactivityDiff::AllZeros`] representation. Otherwise, only modified
 /// indices and their replacement values are stored.
 ///
 /// Newly appended validator scores are included as an extension.
@@ -31,14 +31,14 @@ use crate::types::{ArchivedInactivityDiffs, InactivityDiffs};
 /// # Complexity
 ///
 /// O(n)
-pub fn diff_inactivity(base: &[u64], target: &[u64]) -> InactivityDiffs {
+pub fn diff_inactivity(base: &[u64], target: &[u64]) -> InactivityDiff {
     let target_is_zero = target.iter().all(|&v| v == 0);
 
     if target_is_zero {
         let base_has_non_zero = base.iter().any(|&v| v != 0);
 
         if base_has_non_zero {
-            return InactivityDiffs::AllZeros(target.len() as u32);
+            return InactivityDiff::AllZeros(target.len() as u32);
         }
     }
 
@@ -55,7 +55,7 @@ pub fn diff_inactivity(base: &[u64], target: &[u64]) -> InactivityDiffs {
 
     let extensions = target[common_len..].to_vec();
 
-    InactivityDiffs::Sparse {
+    InactivityDiff::Sparse {
         indices,
         new_values,
         extensions,
@@ -73,13 +73,13 @@ pub fn diff_inactivity(base: &[u64], target: &[u64]) -> InactivityDiffs {
 /// # Complexity
 ///
 /// O(number of recorded updates + appended scores)
-pub fn apply_inactivity(base: &mut Vec<u64>, delta: &ArchivedInactivityDiffs) {
+pub fn apply_inactivity(base: &mut Vec<u64>, delta: &ArchivedInactivityDiff) {
     match delta {
-        ArchivedInactivityDiffs::AllZeros(len) => {
+        ArchivedInactivityDiff::AllZeros(len) => {
             base.clear();
             base.resize(len.to_native() as usize, 0);
         }
-        ArchivedInactivityDiffs::Sparse {
+        ArchivedInactivityDiff::Sparse {
             indices,
             new_values,
             extensions,

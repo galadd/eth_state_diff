@@ -11,7 +11,7 @@
 //! The encoding is independent of the buffer capacity and relies only on the
 //! starting slot and the destination buffer.
 
-use crate::types::{ArchivedRandaoDiffs, RandaoDiffs};
+use crate::types::{ArchivedRandaoDiff, RandaoDiff};
 
 /// Computes the sequence of RANDAO mixes written between two slots.
 ///
@@ -41,7 +41,7 @@ pub fn diff_randao(
     target_slot: u64,
     target_buffer: &[[u8; 32]],
     slots_per_epoch: u64,
-) -> RandaoDiffs {
+) -> RandaoDiff {
     debug_assert!(
         target_slot >= base_slot,
         "target_slot must not precede base_slot"
@@ -55,7 +55,7 @@ pub fn diff_randao(
         let idx = (epoch % capacity) as usize;
         mixes.push(target_buffer[idx]);
     }
-    RandaoDiffs { mixes }
+    RandaoDiff { mixes }
 }
 
 /// Applies a RANDAO delta to a circular mix buffer.
@@ -73,7 +73,7 @@ pub fn diff_randao(
 pub fn apply_randao(
     base_slot: u64,
     base_buffer: &mut [[u8; 32]],
-    delta: &ArchivedRandaoDiffs,
+    delta: &ArchivedRandaoDiff,
     slots_per_epoch: u64,
 ) {
     let capacity = base_buffer.len() as u64;

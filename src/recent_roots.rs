@@ -11,7 +11,7 @@
 //! This representation is independent of the buffer capacity and works with
 //! any fixed-size root ring.
 
-use crate::types::{ArchivedRootsDiffs, RootsDiffs};
+use crate::types::{ArchivedRootsDiff, RootsDiff};
 
 /// Computes the sequence of newly written roots between two slots.
 ///
@@ -30,7 +30,7 @@ use crate::types::{ArchivedRootsDiffs, RootsDiffs};
 /// # Complexity
 ///
 /// O(target_slot - base_slot)
-pub fn diff_roots(base_slot: u64, target_slot: u64, buffer: &[[u8; 32]]) -> RootsDiffs {
+pub fn diff_roots(base_slot: u64, target_slot: u64, buffer: &[[u8; 32]]) -> RootsDiff {
     debug_assert!(
         target_slot >= base_slot,
         "target_slot must not precede base_slot"
@@ -47,7 +47,7 @@ pub fn diff_roots(base_slot: u64, target_slot: u64, buffer: &[[u8; 32]]) -> Root
         roots.push(buffer[idx]);
     }
 
-    RootsDiffs { roots }
+    RootsDiff { roots }
 }
 
 /// Applies a root delta to a circular root buffer.
@@ -61,12 +61,12 @@ pub fn diff_roots(base_slot: u64, target_slot: u64, buffer: &[[u8; 32]]) -> Root
 /// # Complexity
 ///
 /// O(number of recorded roots)
-pub fn apply_roots(base_slot: u64, buffer: &mut [[u8; 32]], delta: &ArchivedRootsDiffs) {
-    let capacity = buffer.len() as u64;
+pub fn apply_roots(base_slot: u64, base_buffer: &mut [[u8; 32]], delta: &ArchivedRootsDiff) {
+    let capacity = base_buffer.len() as u64;
 
     for (i, root) in delta.roots.iter().enumerate() {
         let slot = base_slot + i as u64;
         let idx = (slot % capacity) as usize;
-        buffer[idx] = *root;
+        base_buffer[idx] = *root;
     }
 }

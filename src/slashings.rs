@@ -10,7 +10,7 @@
 //! Applying a delta updates only the modified epochs while leaving all other
 //! entries unchanged.
 
-use crate::types::{ArchivedSlashingsDiffs, SlashingsDiffs};
+use crate::types::{ArchivedSlashingsDiff, SlashingsDiff};
 
 /// Computes a sparse delta between two slashing buffers.
 ///
@@ -42,7 +42,7 @@ pub fn diff_slashings(
     base_buffer: &[u64],
     target_buffer: &[u64],
     slots_per_epoch: u64,
-) -> SlashingsDiffs {
+) -> SlashingsDiff {
     let base_epoch = base_slot / slots_per_epoch;
     let target_epoch = target_slot / slots_per_epoch;
     let modulus = base_buffer.len() as u64;
@@ -64,7 +64,7 @@ pub fn diff_slashings(
         }
     }
 
-    SlashingsDiffs { updates }
+    SlashingsDiff { updates }
 }
 
 /// Applies a slashing delta to a circular slashing buffer.
@@ -78,7 +78,7 @@ pub fn diff_slashings(
 /// # Complexity
 ///
 /// O(number of recorded updates)
-pub fn apply_slashings(base_buffer: &mut [u64], delta: &ArchivedSlashingsDiffs) {
+pub fn apply_slashings(base_buffer: &mut [u64], delta: &ArchivedSlashingsDiff) {
     for update in delta.updates.iter() {
         let idx = update.0.to_native() as usize;
         let val = update.1.to_native();

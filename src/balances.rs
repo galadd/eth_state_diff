@@ -21,9 +21,9 @@
 use rustc_hash::FxHashMap;
 
 use crate::{
-    BalanceDiffs,
+    BalanceDiff,
     types::{
-        ArchivedBalanceDiffs, BitTagVec, SET_NO_CHANGE, SET_TO_DIFF, SET_TO_TARGET_VALUE,
+        ArchivedBalanceDiff, BitTagVec, SET_NO_CHANGE, SET_TO_DIFF, SET_TO_TARGET_VALUE,
         SET_TO_ZERO,
     },
 };
@@ -62,7 +62,7 @@ pub(super) fn write_varint(mut val: u64, buf: &mut Vec<u8>) {
 /// The most common balance difference is stored separately as a mode and all
 /// encoded differences are stored relative to this mode, improving varint
 /// compression.
-pub fn diff_balances(base: &[u64], target: &[u64]) -> BalanceDiffs {
+pub fn diff_balances(base: &[u64], target: &[u64]) -> BalanceDiff {
     let common_len = base.len().min(target.len());
 
     let mut freq_map = FxHashMap::default();
@@ -122,7 +122,7 @@ pub fn diff_balances(base: &[u64], target: &[u64]) -> BalanceDiffs {
         Vec::new()
     };
 
-    BalanceDiffs {
+    BalanceDiff {
         tags,
         mode,
         varint_payload,
@@ -170,7 +170,7 @@ pub(super) fn read_varint(buf: &[u8], cursor: &mut usize) -> u64 {
 /// # Complexity
 ///
 /// O(n)
-pub fn apply_balances(base: &mut Vec<u64>, delta: &ArchivedBalanceDiffs) {
+pub fn apply_balances(base: &mut Vec<u64>, delta: &ArchivedBalanceDiff) {
     let mode = delta.mode.to_native();
 
     // Setup iterators for the sparse payloads

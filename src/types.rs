@@ -22,7 +22,7 @@ pub struct ValidatorPatch {
 }
 
 #[derive(Archive, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
-pub struct ValidatorDiffs {
+pub struct ValidatorDiff {
     pub patches: Vec<ValidatorPatch>,
     pub appended_validators: Vec<u8>,
 }
@@ -37,7 +37,7 @@ pub struct ValidatorDiffs {
 ///
 /// This structure is intended to be serialized with `rkyv`.
 #[derive(Archive, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
-pub struct BalanceDiffs {
+pub struct BalanceDiff {
     pub tags: BitTagVec,
 
     pub mode: i64,
@@ -97,11 +97,11 @@ pub enum ParticipationDiff {
 ///
 /// The encoder automatically selects the most compact representation:
 ///
-/// - [`InactivityDiffs::AllZeros`] when the target vector contains only zero
+/// - [`InactivityDiff::AllZeros`] when the target vector contains only zero
 ///   scores.
-/// - [`InactivityDiffs::Sparse`] when only a subset of scores change.
+/// - [`InactivityDiff::Sparse`] when only a subset of scores change.
 #[derive(Archive, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
-pub enum InactivityDiffs {
+pub enum InactivityDiff {
     /// Fast path for the 99.9% case where no scores change in the overlapping set.
     AllZeros(u32),
 
@@ -128,7 +128,7 @@ pub enum InactivityDiffs {
 /// The buffer capacity is intentionally omitted from the encoding since it is
 /// determined by the destination buffer.
 #[derive(Archive, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
-pub struct RootsDiffs {
+pub struct RootsDiff {
     /// Sequential list of 32-byte hashes added to the circular buffer
     /// between the base slot and target slot.
     pub roots: Vec<[u8; 32]>,
@@ -141,7 +141,7 @@ pub struct RootsDiffs {
 ///
 /// Only epochs whose values changed are included.
 #[derive(Archive, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
-pub struct SlashingsDiffs {
+pub struct SlashingsDiff {
     /// A sparse list of (index, new_slashing_amount).
     /// Index fits in u16 (max size is 8192).
     /// In a 32-epoch window, this Vec will have a length of 0 or 1.
@@ -156,9 +156,28 @@ pub struct SlashingsDiffs {
 /// The circular buffer capacity is intentionally omitted from the encoding, as
 /// it is determined by the destination buffer during application.
 #[derive(Archive, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
-pub struct RandaoDiffs {
+pub struct RandaoDiff {
     /// Sequential list of 32-byte randao reveals added during this window.
     pub mixes: Vec<[u8; 32]>,
+}
+
+#[derive(Archive, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub enum Eth1DataVotesDiff {
+    /// The boundary was NOT crossed. Contains only the newly appended votes.
+    Append(Vec<u8>),
+
+    /// The 2048-slot boundary WAS crossed, and the list was wiped.
+    /// Contains all the votes that occurred after the wipe.
+    ResetAndAppend(Vec<u8>),
+}
+
+#[derive(Archive, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub struct FifoQueueDiff {
+    /// The number of items consumed from the front of the base queue.
+    pub consumed_count: u32,
+
+    /// The raw SSZ bytes of *only* the newly appended items at the end.
+    pub appended_items: Vec<u8>,
 }
 
 #[derive(Eq, PartialEq, Debug, Clone, Default, Archive, Deserialize, Serialize)]
