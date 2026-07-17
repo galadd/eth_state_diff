@@ -1,7 +1,12 @@
 [package]
-name = "eth_state_diff"
+name = "eth-state-diff"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
+authors = ["galadd <gbolahanf.14@gmail.com>"]
+description = "High-performance, allocation-free delta encoding for Ethereum beacon state. Achieves ~150x size reduction over raw states."
+repository = "https://github.com/galadd/eth_state-diff"
+license = "MIT OR Apache-2.0"
+keywords = ["ethereum", "beacon-chain", "state-diff", "compression", "ssz"]
 
 [dependencies]
 rkyv = "0.8.17"
