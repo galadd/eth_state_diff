@@ -1,8 +1,15 @@
 use rkyv::{Archive, Deserialize, Serialize};
 
+/// Size, in bytes, of an SSZ-serialized validator record.
 pub const VALIDATOR_SSZ_SIZE: usize = 121;
+
+/// Protocol-defined withdrawability delay for non-slashed validators.
 pub const MIN_VALIDATOR_WITHDRAWABILITY_DELAY: u64 = 256;
 
+/// A field-level modification to a validator record.
+///
+/// Validator fields are diffed independently to avoid rewriting entire
+/// 121-byte SSZ validator records when only a small subset of fields change.
 #[derive(Archive, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub enum ValidatorField {
     WithdrawalCredentials,
@@ -14,6 +21,10 @@ pub enum ValidatorField {
     WithdrawableEpochSlashed,
 }
 
+/// A modification to a single validator field.
+///
+/// Each patch identifies the validator index, the field being modified,
+/// and the replacement SSZ bytes for that field.
 #[derive(Archive, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct ValidatorPatch {
     pub index: u32,
@@ -21,6 +32,10 @@ pub struct ValidatorPatch {
     pub value: Vec<u8>,
 }
 
+/// Compact representation of the difference between two validator registries.
+///
+/// Only modified validator fields are recorded. Newly appended validators are
+/// stored as raw SSZ bytes and appended during reconstruction.
 #[derive(Archive, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct ValidatorDiff {
     pub patches: Vec<ValidatorPatch>,
@@ -32,8 +47,8 @@ pub struct ValidatorDiff {
 /// A `BalanceDiffs` stores only the information required to transform one
 /// balance vector into another.
 ///
-/// Small balance differences are encoded as zig-zag varints while uncommon
-/// values are stored explicitly.
+/// Small balance differences are encoded as mode-adjusted zig-zag varints,
+/// while values that can not be represented efficiently are stored explicitly.
 ///
 /// This structure is intended to be serialized with `rkyv`.
 #[derive(Archive, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
@@ -161,16 +176,23 @@ pub struct RandaoDiff {
     pub mixes: Vec<[u8; 32]>,
 }
 
+/// Delta representation of the Eth1 data vote list.
+///
+/// The encoder distinguishes between ordinary vote accumulation and the
+/// protocol-defined reset that occurs after an Eth1 voting period.
 #[derive(Archive, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub enum Eth1DataVotesDiff {
-    /// The boundary was NOT crossed. Contains only the newly appended votes.
+    /// Additional votes appended to the existing list.
     Append(Vec<u8>),
 
-    /// The 2048-slot boundary WAS crossed, and the list was wiped.
-    /// Contains all the votes that occurred after the wipe.
+    /// The vote list was reset before appending new votes.
     ResetAndAppend(Vec<u8>),
 }
 
+/// Delta representation for FIFO queues.
+///
+/// Rather than storing the full queue, the delta records how many items were
+/// consumed from the front and the newly appended items at the back.
 #[derive(Archive, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct FifoQueueDiff {
     /// The number of items consumed from the front of the base queue.
@@ -182,13 +204,21 @@ pub struct FifoQueueDiff {
 
 #[derive(Eq, PartialEq, Debug, Clone, Default, Archive, Deserialize, Serialize)]
 pub struct BitTagVec {
-    pub data: Vec<u8>, // 4 entries per byte
+    /// Packed storage containing four 2-bit tags per byte.
+    pub data: Vec<u8>,
     len: usize,
 }
 
+/// Balance is unchanged.
 pub const SET_NO_CHANGE: u8 = 0b00;
+
+/// Balance is replaced with zero.
 pub const SET_TO_ZERO: u8 = 0b10;
+
+/// Balance is reconstructed by applying a stored difference.
 pub const SET_TO_DIFF: u8 = 0b11;
+
+/// Balance is replaced with its absolute target value.
 pub const SET_TO_TARGET_VALUE: u8 = 0b01;
 
 /// Dense 2-bit tag vector.
@@ -213,6 +243,7 @@ impl BitTagVec {
         }
     }
 
+    /// Sets the tag at `idx`.
     #[inline]
     pub fn set(&mut self, idx: usize, tag: u8) {
         let byte = idx / 4;
@@ -221,6 +252,7 @@ impl BitTagVec {
         self.data[byte] |= (tag & 0b11) << shift;
     }
 
+    /// Returns the tag stored at `idx`.
     #[inline]
     pub fn get(&self, idx: usize) -> u8 {
         let byte = idx / 4;

@@ -1,12 +1,41 @@
+//! Delta encoding for fixed-size SSZ FIFO queues.
+//!
+//! A queue transition is represented as the number of items consumed from the
+//! front of the queue together with the raw SSZ bytes of newly appended items.
+//!
+//! This encoding is suitable for append-only FIFO structures such as the
+//! Electra pending operation queues.
+
 use crate::types::{ArchivedFifoQueueDiff, FifoQueueDiff};
 
-/// Finds the offset of `needle` in `haystack`. Returns None if not found.
+/// Finds the first occurrence of an SSZ-encoded queue item within a byte slice.
+///
+/// Returns the byte offset of the first matching item, or `None` if no match is
+/// found.
 fn find_chunk(haystack: &[u8], needle: &[u8]) -> Option<usize> {
     haystack
         .windows(needle.len())
         .position(|window| window == needle)
 }
 
+/// Computes the delta between two serialized FIFO queues.
+///
+/// The queues are expected to contain fixed-size SSZ items.
+///
+/// The resulting delta records:
+///
+/// - the number of items consumed from the front of the base queue; and
+/// - the SSZ bytes of items appended to the end of the queue.
+///
+/// If no overlap between the queues can be identified, the encoder assumes the
+/// base queue was entirely consumed.
+///
+/// # Algorithm
+///
+/// The encoder identifies the overlap by locating the first item in the target
+/// queue within the base queue. This assumes queue items are sufficiently
+/// unique that the first match represents the correct continuation of the FIFO
+/// sequence.
 pub fn diff_fifo_queue(base_ssz: &[u8], target_ssz: &[u8], item_ssz_size: usize) -> FifoQueueDiff {
     if target_ssz.is_empty() {
         return FifoQueueDiff {
@@ -53,6 +82,19 @@ pub fn diff_fifo_queue(base_ssz: &[u8], target_ssz: &[u8], item_ssz_size: usize)
     }
 }
 
+/// Applies a FIFO queue delta in place.
+///
+/// The destination queue is updated by:
+///
+/// 1. Removing `consumed_count` items from the front.
+/// 2. Appending the recorded SSZ items to the end.
+///
+/// If `consumed_count` exceeds the current queue length, the destination queue
+/// is cleared before appending.
+///
+/// # Complexity
+///
+/// O(queue size + appended bytes)
 pub fn apply_fifo_queue(base: &mut Vec<u8>, delta: &ArchivedFifoQueueDiff, item_ssz_size: usize) {
     let bytes_to_drain = delta.consumed_count.to_native() as usize * item_ssz_size;
     if bytes_to_drain > base.len() {
