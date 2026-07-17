@@ -1,22 +1,21 @@
 # eth_state_diff
 
-`eth_state_diff` provides fast delta encoding and reconstruction for Ethereum
-consensus-layer state.
+`eth_state_diff` is a high-performance library for computing and applying
+compact deltas between Ethereum consensus-layer states.
 
-The crate is designed for clients that frequently persist, transmit, or
-reconstruct Beacon Chain state while minimizing storage and bandwidth costs.
-
-Unlike snapshot-based storage, `eth_state_diff` computes compact binary deltas
-between consecutive states and reconstructs the target state with a single
-linear pass.
+The crate is intended for consensus clients, archival storage, state
+synchronization, and historical state reconstruction. Instead of storing full
+snapshots, it represents state transitions as specialized binary deltas that
+can be efficiently serialized, compressed, and applied to reconstruct the
+target state.
 
 ## Features
 
-- Fast O(n) delta generation
-- Fast in-place reconstruction
-- Compact binary representation
-- Zero-copy deserialization via `rkyv`
+- Fast linear-time delta generation
+- Fast in-place state reconstruction
+- Specialized encoders for consensus state components
+- Compact binary delta representation
+- Zero-copy serialization with `rkyv`
 - Excellent compression with `zstd`
+- Generic traits for integration with any consensus client
 - Minimal allocations during reconstruction
-- Designed for embedding into consensus clients
-
