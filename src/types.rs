@@ -206,7 +206,7 @@ pub struct FifoQueueDiff {
 pub struct BitTagVec {
     /// Packed storage containing four 2-bit tags per byte.
     pub data: Vec<u8>,
-    len: usize,
+    pub len: usize,
 }
 
 /// Balance is unchanged.

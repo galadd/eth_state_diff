@@ -20,12 +20,9 @@
 
 use rustc_hash::FxHashMap;
 
-use crate::{
-    BalanceDiff,
-    types::{
-        ArchivedBalanceDiff, BitTagVec, SET_NO_CHANGE, SET_TO_DIFF, SET_TO_TARGET_VALUE,
-        SET_TO_ZERO,
-    },
+use crate::types::{
+    ArchivedBalanceDiff, BalanceDiff, BitTagVec, SET_NO_CHANGE, SET_TO_DIFF, SET_TO_TARGET_VALUE,
+    SET_TO_ZERO,
 };
 
 #[inline]
@@ -173,33 +170,36 @@ pub(super) fn read_varint(buf: &[u8], cursor: &mut usize) -> u64 {
 pub fn apply_balances(base: &mut Vec<u64>, delta: &ArchivedBalanceDiff) {
     let mode = delta.mode.to_native();
 
-    // Setup iterators for the sparse payloads
+    let tag_len = delta.tags.len.to_native() as usize;
+
+    debug_assert_eq!(
+        base.len(),
+        tag_len,
+        "Base balance length does not match delta tag length"
+    );
+
     let mut target_iter = delta.target_values.iter();
-    let payload = delta.varint_payload.as_slice(); // Zero-copy byte slice
+    let payload = delta.varint_payload.as_slice();
     let mut payload_cursor = 0usize;
 
     let mut base_idx = 0usize;
 
-    // Iterate over the dense tag array, processing 4 validators per byte
     for &tag_byte in delta.tags.data.iter() {
-        // Fast path: if the whole byte is 0b00000000, skip 4 validators instantly
+        if base_idx >= tag_len {
+            break;
+        }
+
+        // Fast path: four consecutive SET_NO_CHANGE entries.
         if tag_byte == 0 {
-            base_idx += 4;
-            // Edge case: if base.len() isn't perfectly divisible by 4,
-            // ensure we don't run past the end on the very last iteration.
-            if base_idx > base.len() {
-                break;
-            }
+            base_idx = (base_idx + 4).min(tag_len);
             continue;
         }
 
-        // Slow path: at least one validator in this chunk of 4 changed
         for bit in 0..4 {
-            if base_idx >= base.len() {
+            if base_idx >= tag_len {
                 break;
             }
 
-            // Extract the 2-bit tag for this specific validator
             let tag = (tag_byte >> (bit * 2)) & 0b11;
 
             match tag {
@@ -208,21 +208,12 @@ pub fn apply_balances(base: &mut Vec<u64>, delta: &ArchivedBalanceDiff) {
                     base[base_idx] = 0;
                 }
                 SET_TO_TARGET_VALUE => {
-                    // Unwrap is safe: diff logic guarantees length congruence
-                    let val = target_iter.next().unwrap();
-                    base[base_idx] = val.to_native();
+                    base[base_idx] = target_iter.next().unwrap().to_native();
                 }
                 SET_TO_DIFF => {
-                    // 1. Read the zigzag-encoded varint from the payload stream
                     let encoded = read_varint(payload, &mut payload_cursor);
-
-                    // 2. Decode back to a signed i64 correction
                     let corrected = zigzag_decode(encoded);
-
-                    // 3. Reconstruct the absolute diff by adding the mode back
                     let diff = corrected + mode;
-
-                    // 4. Apply to base
                     base[base_idx] = (base[base_idx] as i64 + diff) as u64;
                 }
                 _ => unreachable!("Invalid 2-bit tag state encountered during apply"),
