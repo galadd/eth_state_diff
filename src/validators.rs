@@ -22,8 +22,8 @@
 //! size of the encoded delta without losing information.
 
 use crate::types::{
-    ArchivedValidatorDiff, ArchivedValidatorField, MIN_VALIDATOR_WITHDRAWABILITY_DELAY,
-    VALIDATOR_SSZ_SIZE, ValidatorDiff, ValidatorField, ValidatorPatch,
+    ArchivedValidatorDiff, ArchivedValidatorField, ValidatorDiff, ValidatorField, ValidatorPatch,
+    MIN_VALIDATOR_WITHDRAWABILITY_DELAY, VALIDATOR_SSZ_SIZE,
 };
 
 /// Computes a compact delta between two validator registry SSZ buffers.
@@ -59,14 +59,12 @@ pub fn diff_validators(base_bytes: &[u8], target_bytes: &[u8]) -> ValidatorDiff 
     let common_len = base_len.min(target_len);
 
     let mut patches = Vec::with_capacity(512);
-    let mut base_val_32 = [0u8; 32];
-    let mut base_val_8 = [0u8; 8];
 
     for i in 0..common_len {
         let b_start = i * VALIDATOR_SSZ_SIZE;
         let t_start = i * VALIDATOR_SSZ_SIZE;
 
-        // Fast path: 121-byte chunk comparison
+        // Fast path: validator is identical.
         if base_bytes[b_start..b_start + VALIDATOR_SSZ_SIZE]
             == target_bytes[t_start..t_start + VALIDATOR_SSZ_SIZE]
         {
@@ -74,9 +72,9 @@ pub fn diff_validators(base_bytes: &[u8], target_bytes: &[u8]) -> ValidatorDiff 
         }
 
         // 1. Withdrawal Credentials (Offset 48, 32 bytes)
-        base_val_32.copy_from_slice(&base_bytes[b_start + 48..b_start + 80]);
+        let base_wc = &base_bytes[b_start + 48..b_start + 80];
         let target_wc = &target_bytes[t_start + 48..t_start + 80];
-        if base_val_32 != target_wc {
+        if base_wc != target_wc {
             patches.push(ValidatorPatch {
                 index: i as u32,
                 field: ValidatorField::WithdrawalCredentials,
@@ -85,9 +83,9 @@ pub fn diff_validators(base_bytes: &[u8], target_bytes: &[u8]) -> ValidatorDiff 
         }
 
         // 2. Effective Balance (Offset 80, 8 bytes)
-        base_val_8.copy_from_slice(&base_bytes[b_start + 80..b_start + 88]);
+        let base_eb = &base_bytes[b_start + 80..b_start + 88];
         let target_eb = &target_bytes[t_start + 80..t_start + 88];
-        if base_val_8 != target_eb {
+        if base_eb != target_eb {
             patches.push(ValidatorPatch {
                 index: i as u32,
                 field: ValidatorField::EffectiveBalance,
@@ -105,9 +103,9 @@ pub fn diff_validators(base_bytes: &[u8], target_bytes: &[u8]) -> ValidatorDiff 
         }
 
         // 4. Activation Eligibility Epoch (Offset 89, 8 bytes)
-        base_val_8.copy_from_slice(&base_bytes[b_start + 89..b_start + 97]);
+        let base_aee = &base_bytes[b_start + 89..b_start + 97];
         let target_aee = &target_bytes[t_start + 89..t_start + 97];
-        if base_val_8 != target_aee {
+        if base_aee != target_aee {
             patches.push(ValidatorPatch {
                 index: i as u32,
                 field: ValidatorField::ActivationEligibilityEpoch,
@@ -116,9 +114,9 @@ pub fn diff_validators(base_bytes: &[u8], target_bytes: &[u8]) -> ValidatorDiff 
         }
 
         // 5. Activation Epoch (Offset 97, 8 bytes)
-        base_val_8.copy_from_slice(&base_bytes[b_start + 97..b_start + 105]);
+        let base_ae = &base_bytes[b_start + 97..b_start + 105];
         let target_ae = &target_bytes[t_start + 97..t_start + 105];
-        if base_val_8 != target_ae {
+        if base_ae != target_ae {
             patches.push(ValidatorPatch {
                 index: i as u32,
                 field: ValidatorField::ActivationEpoch,
@@ -127,9 +125,9 @@ pub fn diff_validators(base_bytes: &[u8], target_bytes: &[u8]) -> ValidatorDiff 
         }
 
         // 6. Exit Epoch (Offset 105, 8 bytes)
-        base_val_8.copy_from_slice(&base_bytes[b_start + 105..b_start + 113]);
+        let base_ee = &base_bytes[b_start + 105..b_start + 113];
         let target_ee = &target_bytes[t_start + 105..t_start + 113];
-        if base_val_8 != target_ee {
+        if base_ee != target_ee {
             patches.push(ValidatorPatch {
                 index: i as u32,
                 field: ValidatorField::ExitEpoch,
@@ -137,12 +135,12 @@ pub fn diff_validators(base_bytes: &[u8], target_bytes: &[u8]) -> ValidatorDiff 
             });
         }
 
-        // 7. WITHDRAWABLE EPOCH ELIMINATION
-        let is_slashed = target_bytes[t_start + 88] != 0;
-        if is_slashed {
-            base_val_8.copy_from_slice(&base_bytes[b_start + 113..b_start + 121]);
+        // 7. Withdrawable Epoch (only stored for slashed validators)
+        if target_bytes[t_start + 88] != 0 {
+            let base_we = &base_bytes[b_start + 113..b_start + 121];
             let target_we = &target_bytes[t_start + 113..t_start + 121];
-            if base_val_8 != target_we {
+
+            if base_we != target_we {
                 patches.push(ValidatorPatch {
                     index: i as u32,
                     field: ValidatorField::WithdrawableEpochSlashed,
@@ -152,7 +150,7 @@ pub fn diff_validators(base_bytes: &[u8], target_bytes: &[u8]) -> ValidatorDiff 
         }
     }
 
-    // Handle Appended Validators (just copy the raw SSZ tail)
+    // Handle appended validators (raw SSZ tail).
     let appended_start = common_len * VALIDATOR_SSZ_SIZE;
     let appended_validators = if target_bytes.len() > appended_start {
         target_bytes[appended_start..].to_vec()
