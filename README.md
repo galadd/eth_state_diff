@@ -1,5 +1,9 @@
 # eth_state_diff
 
+
+[![Crates.io](https://img.shields.io/crates/v/eth-state-diff.svg)](https://crates.io/crates/eth-state-diff)
+[![Docs.rs](https://docs.rs/eth-state-diff/badge.svg)](https://docs.rs/eth-state-diff)
+
 eth_state_diff computes and applies compact binary deltas between Ethereum consensus-layer states. It is designed for archival storage, fast-sync, and historical state reconstruction, replacing full snapshots with highly compressible encodings.
 
 ## Design Philosophy
@@ -14,3 +18,12 @@ This library targets the **disk layer**. It operates strictly on contiguous, fla
 - **Entropy-optimal**: Output payloads are structured to compress to extreme degrees using standard tools like zstd (e.g., ~900KB for 32 epochs of mainnet state).
 - **Minimal allocations during apply**: Reconstruction modifies target buffers in-place, requiring heap allocations only for newly appended validators.
 - **Generic integration**: Simple traits (DiffSource and DiffTarget) allow integration with any consensus client that can provide or consume raw SSZ byte slices.
+
+## License
+
+Licensed under either of
+
+- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE))
+- MIT License ([LICENSE-MIT](LICENSE-MIT))
+
+at your option.
