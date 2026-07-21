@@ -21,7 +21,7 @@
 use rustc_hash::FxHashMap;
 
 use crate::types::{
-    ArchivedBalanceDiff, BalanceDiff, BitTagVec, SET_NO_CHANGE, SET_TO_DIFF, SET_TO_TARGET_VALUE,
+    ArchivedBalancesDiff, BalancesDiff, BitTagVec, SET_NO_CHANGE, SET_TO_DIFF, SET_TO_TARGET_VALUE,
     SET_TO_ZERO,
 };
 
@@ -59,7 +59,7 @@ pub(super) fn write_varint(mut val: u64, buf: &mut Vec<u8>) {
 /// The most common balance difference is stored separately as a mode and all
 /// encoded differences are stored relative to this mode, improving varint
 /// compression.
-pub fn diff_balances(base: &[u64], target: &[u64]) -> BalanceDiff {
+pub fn diff_balances(base: &[u64], target: &[u64]) -> BalancesDiff {
     let common_len = base.len().min(target.len());
 
     let mut freq_map = FxHashMap::default();
@@ -119,7 +119,7 @@ pub fn diff_balances(base: &[u64], target: &[u64]) -> BalanceDiff {
         Vec::new()
     };
 
-    BalanceDiff {
+    BalancesDiff {
         tags,
         mode,
         varint_payload,
@@ -167,7 +167,7 @@ pub(super) fn read_varint(buf: &[u8], cursor: &mut usize) -> u64 {
 /// # Complexity
 ///
 /// O(n)
-pub fn apply_balances(base: &mut Vec<u64>, delta: &ArchivedBalanceDiff) {
+pub fn apply_balances(base: &mut Vec<u64>, delta: &ArchivedBalancesDiff) {
     let mode = delta.mode.to_native();
 
     let tag_len = delta.tags.len.to_native() as usize;

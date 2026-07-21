@@ -37,7 +37,7 @@ pub struct ValidatorPatch {
 /// Only modified validator fields are recorded. Newly appended validators are
 /// stored as raw SSZ bytes and appended during reconstruction.
 #[derive(Archive, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
-pub struct ValidatorDiff {
+pub struct ValidatorsDiff {
     pub patches: Vec<ValidatorPatch>,
     pub appended_validators: Vec<u8>,
 }
@@ -52,7 +52,7 @@ pub struct ValidatorDiff {
 ///
 /// This structure is intended to be serialized with `rkyv`.
 #[derive(Archive, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
-pub struct BalanceDiff {
+pub struct BalancesDiff {
     pub tags: BitTagVec,
 
     pub mode: i64,

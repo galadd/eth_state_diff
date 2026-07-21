@@ -27,8 +27,8 @@ pub mod validators;
 use rkyv::{Archive, Deserialize, Serialize};
 
 use crate::types::{
-    BalanceDiff, Eth1DataVotesDiff, FifoQueueDiff, InactivityDiff, ParticipationDiff, RandaoDiff,
-    RootsDiff, SlashingsDiff, ValidatorDiff,
+    BalancesDiff, Eth1DataVotesDiff, FifoQueueDiff, InactivityDiff, ParticipationDiff, RandaoDiff,
+    RootsDiff, SlashingsDiff, ValidatorsDiff,
 };
 
 /// Ethereum consensus fork supported by this delta.
@@ -59,9 +59,9 @@ pub struct BeaconStateDelta {
     pub base_slot: u64,
     pub scalar_header: Vec<u8>,
 
-    pub balances: BalanceDiff,
+    pub balances: BalancesDiff,
     pub previous_participation: ParticipationDiff,
-    pub validators: ValidatorDiff,
+    pub validators: ValidatorsDiff,
     pub block_roots: RootsDiff,
     pub state_roots: RootsDiff,
     pub randao_mixes: RandaoDiff,

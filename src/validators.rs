@@ -22,7 +22,7 @@
 //! size of the encoded delta without losing information.
 
 use crate::types::{
-    ArchivedValidatorDiff, ArchivedValidatorField, ValidatorDiff, ValidatorField, ValidatorPatch,
+    ArchivedValidatorField, ArchivedValidatorsDiff, ValidatorField, ValidatorPatch, ValidatorsDiff,
     MIN_VALIDATOR_WITHDRAWABILITY_DELAY, VALIDATOR_SSZ_SIZE,
 };
 
@@ -53,7 +53,7 @@ use crate::types::{
 /// # Panics
 ///
 /// Never.
-pub fn diff_validators(base_bytes: &[u8], target_bytes: &[u8]) -> ValidatorDiff {
+pub fn diff_validators(base_bytes: &[u8], target_bytes: &[u8]) -> ValidatorsDiff {
     let base_len = base_bytes.len() / VALIDATOR_SSZ_SIZE;
     let target_len = target_bytes.len() / VALIDATOR_SSZ_SIZE;
     let common_len = base_len.min(target_len);
@@ -158,7 +158,7 @@ pub fn diff_validators(base_bytes: &[u8], target_bytes: &[u8]) -> ValidatorDiff 
         Vec::new()
     };
 
-    ValidatorDiff {
+    ValidatorsDiff {
         patches,
         appended_validators,
     }
@@ -182,7 +182,7 @@ pub fn diff_validators(base_bytes: &[u8], target_bytes: &[u8]) -> ValidatorDiff 
 ///
 /// Supplying a delta that was not produced from the provided base registry
 /// results in undefined reconstructed state.
-pub fn apply_validators(base: &mut Vec<u8>, delta: &ArchivedValidatorDiff) {
+pub fn apply_validators(base: &mut Vec<u8>, delta: &ArchivedValidatorsDiff) {
     for patch in delta.patches.iter() {
         let idx = patch.index.to_native() as usize;
         let start = idx * VALIDATOR_SSZ_SIZE;
