@@ -1,6 +1,6 @@
 [package]
 name = "eth-state-diff"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 authors = ["galadd <gbolahanf.14@gmail.com>"]
 description = "Minimal-allocation delta encoding for Ethereum consensus state, optimized for archival storage and zstd compression."
