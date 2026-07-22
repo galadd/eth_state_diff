@@ -6,9 +6,11 @@
 
 eth_state_diff computes and applies compact binary deltas between Ethereum consensus-layer states. It is designed for archival storage, fast-sync, and historical state reconstruction, replacing full snapshots with highly compressible encodings.
 
-## Design Philosophy
+This library targets the **disk layer** — the output is always a compact, serializable delta. 
 
-This library targets the **disk layer**. It operates strictly on contiguous, flat SSZ byte buffers (&[u8], &mut Vec<u8>) rather than complex in-memory tree structures. This allows the delta algorithms to saturate memory bandwidth and avoids serialization overhead during reconstruction.
+Consensus clients using persistent or tree-backed data structures will need to materialize these flat views before calling create. While this materialization introduces overhead to the integration step, it allows the diffing engine itself to operate at maximum memory bandwidth, strictly avoiding the cache-thrashing penalties of per-element tree traversals on dense data.
+
+**Note on Integration Overhead**: The primary bottleneck in adopting this library for tree-backed clients is the flattening step. Future optimizations may explore streaming SSZ serializers or tree-specific traversal helpers, and contributions in this area are highly welcome.
 
 ## Features
 
