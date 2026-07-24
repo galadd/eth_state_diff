@@ -142,7 +142,6 @@ pub fn apply<M: DiffTarget>(mut state: M, delta: &ArchivedBeaconStateDelta) -> M
     );
 
     let base_slot = delta.base_slot.to_native();
-    let slots_per_epoch: u64 = 32;
 
     *state.scalar_header_mut() = delta.scalar_header.as_slice().to_vec();
 
@@ -253,7 +252,6 @@ pub fn create<R: DiffSource>(state: &R) -> BeaconStateDelta {
         state.pending_consolidations();
 
     let (base_slot, target_slot) = state.slot();
-    let slots_per_epoch: u64 = 32;
 
     BeaconStateDelta {
         fork: state.fork(),
@@ -272,18 +270,13 @@ pub fn create<R: DiffSource>(state: &R) -> BeaconStateDelta {
         validators: validators::diff_validators(base_validators, target_validators),
 
         block_roots: recent_roots::diff_roots(base_slot, target_slot, state.block_roots()),
-        state_roots: recent_roots::diff_roots(
-            base_slot,
-            base_slot + slots_per_epoch,
-            state.state_roots(),
-        ),
+        state_roots: recent_roots::diff_roots(base_slot, target_slot, state.state_roots()),
         randao_mixes: randao_mixes::diff_randao(base_slot, target_slot, state.randao_mixes()),
         slashings: slashings::diff_slashings(
             base_slot,
-            base_slot + slots_per_epoch,
+            target_slot,
             base_slashings,
             target_slashings,
-            slots_per_epoch,
         ),
         inactivity_scores: inactivity_scores::diff_inactivity(base_inactivity, target_inactivity),
 

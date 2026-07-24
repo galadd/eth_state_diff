@@ -10,7 +10,7 @@
 //! Applying a delta updates only the modified epochs while leaving all other
 //! entries unchanged.
 
-use crate::types::{ArchivedSlashingsDiff, SlashingsDiff};
+use crate::types::{ArchivedSlashingsDiff, SlashingsDiff, SLOTS_PER_EPOCH};
 
 /// Computes a sparse delta between two slashing buffers.
 ///
@@ -32,19 +32,14 @@ use crate::types::{ArchivedSlashingsDiff, SlashingsDiff};
 /// # Complexity
 ///
 /// O(number of traversed epochs)
-///
-/// # Panics
-///
-/// Panics if `target_slot < base_slot`.
 pub fn diff_slashings(
     base_slot: u64,
     target_slot: u64,
     base_buffer: &[u64],
     target_buffer: &[u64],
-    slots_per_epoch: u64,
 ) -> SlashingsDiff {
-    let base_epoch = base_slot / slots_per_epoch;
-    let target_epoch = target_slot / slots_per_epoch;
+    let base_epoch = base_slot / SLOTS_PER_EPOCH;
+    let target_epoch = target_slot / SLOTS_PER_EPOCH;
     let modulus = base_buffer.len() as u64;
 
     let mut updates = Vec::new();

@@ -11,7 +11,7 @@
 //! The encoding is independent of the buffer capacity and relies only on the
 //! starting slot and the destination buffer.
 
-use crate::types::{ArchivedRandaoDiff, RandaoDiff};
+use crate::types::{ArchivedRandaoDiff, RandaoDiff, SLOTS_PER_EPOCH};
 
 /// Computes the sequence of RANDAO mixes written between two slots.
 ///
@@ -36,19 +36,9 @@ use crate::types::{ArchivedRandaoDiff, RandaoDiff};
 /// # Panics
 ///
 /// Panics if `target_slot < base_slot`.
-pub fn diff_randao(
-    base_slot: u64,
-    target_slot: u64,
-    target_buffer: &[[u8; 32]],
-    slots_per_epoch: u64,
-) -> RandaoDiff {
-    debug_assert!(
-        target_slot >= base_slot,
-        "target_slot must not precede base_slot"
-    );
-
-    let base_epoch = base_slot / slots_per_epoch;
-    let target_epoch = target_slot / slots_per_epoch;
+pub fn diff_randao(base_slot: u64, target_slot: u64, target_buffer: &[[u8; 32]]) -> RandaoDiff {
+    let base_epoch = base_slot / SLOTS_PER_EPOCH;
+    let target_epoch = target_slot / SLOTS_PER_EPOCH;
     let capacity = target_buffer.len() as u64;
     let mut mixes = Vec::with_capacity((target_epoch - base_epoch + 1) as usize);
     for epoch in base_epoch..=target_epoch {
@@ -70,14 +60,9 @@ pub fn diff_randao(
 /// # Complexity
 ///
 /// O(number of encoded epochs)
-pub fn apply_randao(
-    base_slot: u64,
-    base_buffer: &mut [[u8; 32]],
-    delta: &ArchivedRandaoDiff,
-    slots_per_epoch: u64,
-) {
+pub fn apply_randao(base_slot: u64, base_buffer: &mut [[u8; 32]], delta: &ArchivedRandaoDiff) {
     let capacity = base_buffer.len() as u64;
-    let mut current_epoch = base_slot / slots_per_epoch;
+    let mut current_epoch = base_slot / SLOTS_PER_EPOCH;
     for mix in delta.mixes.iter() {
         let idx = (current_epoch % capacity) as usize;
         base_buffer[idx] = *mix;

@@ -1,5 +1,7 @@
 use rkyv::{Archive, Deserialize, Serialize};
 
+pub const SLOTS_PER_EPOCH: u64 = 32;
+
 /// Size, in bytes, of an SSZ-serialized validator record.
 pub const VALIDATOR_SSZ_SIZE: usize = 121;
 
