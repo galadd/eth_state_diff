@@ -15,20 +15,21 @@
 
 pub mod balances;
 pub mod eth1_data_votes;
-pub mod fifo_queue;
 pub mod inactivity_scores;
 pub mod participation;
+pub mod pending_queue;
 pub mod randao_mixes;
 pub mod recent_roots;
 pub mod slashings;
+pub mod sync_committee;
 pub mod types;
 pub mod validators;
 
 use rkyv::{Archive, Deserialize, Serialize};
 
 use crate::types::{
-    BalancesDiff, Eth1DataVotesDiff, FifoQueueDiff, InactivityDiff, ParticipationDiff, RandaoDiff,
-    RootsDiff, SlashingsDiff, ValidatorsDiff,
+    BalancesDiff, Eth1DataVotesDiff, InactivityDiff, ParticipationDiff, QueueDiff, RandaoDiff,
+    RootsDiff, SlashingsDiff, SyncCommitteeDiff, ValidatorsDiff,
 };
 
 /// Ethereum consensus fork supported by this delta.
@@ -70,10 +71,17 @@ pub struct BeaconStateDelta {
 
     pub eth1_data_votes: Eth1DataVotesDiff,
 
-    pub pending_deposits: FifoQueueDiff,
-    pub pending_partial_withdrawals: FifoQueueDiff,
-    pub pending_consolidations: FifoQueueDiff,
+    pub current_sync_committee: SyncCommitteeDiff,
+    pub next_sync_committee: SyncCommitteeDiff,
+
+    pub pending_deposits: QueueDiff,
+    pub pending_partial_withdrawals: QueueDiff,
+    pub pending_consolidations: QueueDiff,
 }
+
+const PENDING_DEPOSIT_SSZ_SIZE: usize = 192;
+const PARTIAL_WITHDRAWAL_SSZ_SIZE: usize = 121;
+const PENDING_CONSOLIDATION_SSZ_SIZE: usize = 16;
 
 /// Mutable view of a beacon state.
 ///
@@ -96,6 +104,9 @@ pub trait DiffTarget {
     fn inactivity_scores_mut(&mut self) -> &mut Vec<u64>;
 
     fn eth1_data_votes_mut(&mut self) -> &mut Vec<u8>;
+
+    fn current_sync_committee_mut(&mut self) -> &mut Vec<u8>;
+    fn next_sync_committee_mut(&mut self) -> &mut Vec<u8>;
 
     fn pending_deposits_mut(&mut self) -> &mut Vec<u8>;
     fn pending_partial_withdrawals_mut(&mut self) -> &mut Vec<u8>;
@@ -153,16 +164,29 @@ pub fn apply<M: DiffTarget>(mut state: M, delta: &ArchivedBeaconStateDelta) -> M
 
     eth1_data_votes::apply_eth1_votes(state.eth1_data_votes_mut(), &delta.eth1_data_votes);
 
-    fifo_queue::apply_fifo_queue(state.pending_deposits_mut(), &delta.pending_deposits, 88);
-    fifo_queue::apply_fifo_queue(
+    sync_committee::apply_sync_committee(
+        state.current_sync_committee_mut(),
+        &delta.current_sync_committee,
+    );
+    sync_committee::apply_sync_committee(
+        state.next_sync_committee_mut(),
+        &delta.next_sync_committee,
+    );
+
+    pending_queue::apply_queue(
+        state.pending_deposits_mut(),
+        &delta.pending_deposits,
+        PENDING_DEPOSIT_SSZ_SIZE,
+    );
+    pending_queue::apply_queue(
         state.pending_partial_withdrawals_mut(),
         &delta.pending_partial_withdrawals,
-        121,
+        PARTIAL_WITHDRAWAL_SSZ_SIZE,
     );
-    fifo_queue::apply_fifo_queue(
+    pending_queue::apply_queue(
         state.pending_consolidations_mut(),
         &delta.pending_consolidations,
-        169,
+        PENDING_CONSOLIDATION_SSZ_SIZE,
     );
 
     state
@@ -192,9 +216,12 @@ pub trait DiffSource {
 
     fn eth1_data_votes(&self) -> (&[u8], &[u8]);
 
-    fn pending_deposits(&self) -> FifoQueueDiff;
-    fn pending_partial_withdrawals(&self) -> FifoQueueDiff;
-    fn pending_consolidations(&self) -> FifoQueueDiff;
+    fn current_sync_committee(&self) -> (&[u8], &[u8]);
+    fn next_sync_committee(&self) -> (&[u8], &[u8]);
+
+    fn pending_deposits(&self) -> (&[u8], &[u8]);
+    fn pending_partial_withdrawals(&self) -> (&[u8], &[u8]);
+    fn pending_consolidations(&self) -> (&[u8], &[u8]);
 }
 
 /// Creates a delta between two beacon states.
@@ -215,6 +242,12 @@ pub fn create<R: DiffSource>(state: &R) -> BeaconStateDelta {
     let (base_inactivity, target_inactivity) = state.inactivity_scores();
     let (base_slashings, target_slashings) = state.slashings();
     let (base_eth1_data_votes, target_eth1_data_votes) = state.eth1_data_votes();
+    let (base_curr_sync, target_curr_sync) = state.current_sync_committee();
+    let (base_next_sync, target_next_sync) = state.next_sync_committee();
+    let (base_pending_deposits, target_pending_deposits) = state.pending_deposits();
+    let (base_pending_pw, target_pending_pw) = state.pending_partial_withdrawals();
+    let (base_pending_consolidations, target_pending_consolidations) =
+        state.pending_consolidations();
 
     let (base_slot, target_slot) = state.slot();
     let slots_per_epoch: u64 = 32;
@@ -257,8 +290,26 @@ pub fn create<R: DiffSource>(state: &R) -> BeaconStateDelta {
             target_eth1_data_votes,
         ),
 
-        pending_deposits: state.pending_deposits(),
-        pending_partial_withdrawals: state.pending_partial_withdrawals(),
-        pending_consolidations: state.pending_consolidations(),
+        current_sync_committee: sync_committee::diff_sync_committee(
+            base_curr_sync,
+            target_curr_sync,
+        ),
+        next_sync_committee: sync_committee::diff_sync_committee(base_next_sync, target_next_sync),
+
+        pending_deposits: pending_queue::diff_queue(
+            base_pending_deposits,
+            target_pending_deposits,
+            PENDING_DEPOSIT_SSZ_SIZE,
+        ),
+        pending_partial_withdrawals: pending_queue::diff_queue(
+            base_pending_pw,
+            target_pending_pw,
+            PARTIAL_WITHDRAWAL_SSZ_SIZE,
+        ),
+        pending_consolidations: pending_queue::diff_queue(
+            base_pending_consolidations,
+            target_pending_consolidations,
+            PENDING_CONSOLIDATION_SSZ_SIZE,
+        ),
     }
 }

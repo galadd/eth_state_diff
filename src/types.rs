@@ -189,17 +189,41 @@ pub enum Eth1DataVotesDiff {
     ResetAndAppend(Vec<u8>),
 }
 
-/// Delta representation for FIFO queues.
+/// Universal delta representation for list-like state structures.
 ///
-/// Rather than storing the full queue, the delta records how many items were
-/// consumed from the front and the newly appended items at the back.
+/// Handles both pure FIFO queues (consolidations, withdrawals) and
+/// queues with rare reordering mutations (deposits) safely via strict validation.
 #[derive(Archive, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
-pub struct FifoQueueDiff {
-    /// The number of items consumed from the front of the base queue.
-    pub consumed_count: u32,
+pub enum QueueDiff {
+    /// Pure FIFO behavior validated by strict byte-matching.
+    ///
+    /// Records the number of items consumed from the front and the raw SSZ
+    /// bytes of newly appended items at the back.
+    Fifo {
+        /// The number of items consumed from the front of the base queue.
+        consumed_count: u32,
+        /// The raw SSZ bytes of *only* the newly appended items at the end.
+        appended_items: Vec<u8>,
+    },
 
-    /// The raw SSZ bytes of *only* the newly appended items at the end.
-    pub appended_items: Vec<u8>,
+    /// Fallback for non-FIFO mutations (e.g., a deposit was postponed).
+    ///
+    /// Stores the complete serialized target list.
+    FullReplacement(Vec<u8>),
+}
+
+/// Delta representation for sync committees.
+///
+/// Sync committees only change once per sync committee period (256 epochs on
+/// Mainnet). For 32-epoch diff windows, the committee is almost always unchanged.
+/// Therefore, we use a simple unchanged/full-replacement strategy.
+#[derive(Archive, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub enum SyncCommitteeDiff {
+    /// The sync committee did not change during this delta window.
+    Unchanged,
+    /// The sync committee period boundary was crossed. The entire new committee
+    /// is stored as raw SSZ bytes (24,624 bytes).
+    FullReplacement(Vec<u8>),
 }
 
 #[derive(Eq, PartialEq, Debug, Clone, Default, Archive, Deserialize, Serialize)]
