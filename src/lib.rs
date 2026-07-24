@@ -62,6 +62,7 @@ pub struct BeaconStateDelta {
 
     pub balances: BalancesDiff,
     pub previous_participation: ParticipationDiff,
+    pub current_participation: ParticipationDiff,
     pub validators: ValidatorsDiff,
     pub block_roots: RootsDiff,
     pub state_roots: RootsDiff,
@@ -96,6 +97,7 @@ pub trait DiffTarget {
 
     fn balances_mut(&mut self) -> &mut Vec<u64>;
     fn previous_participation_mut(&mut self) -> &mut Vec<u8>;
+    fn current_participation_mut(&mut self) -> &mut Vec<u8>;
     fn validators_mut(&mut self) -> &mut Vec<u8>;
     fn block_roots_mut(&mut self) -> &mut [[u8; 32]];
     fn state_roots_mut(&mut self) -> &mut [[u8; 32]];
@@ -149,16 +151,15 @@ pub fn apply<M: DiffTarget>(mut state: M, delta: &ArchivedBeaconStateDelta) -> M
         state.previous_participation_mut(),
         &delta.previous_participation,
     );
+    participation::apply_participation(
+        state.current_participation_mut(),
+        &delta.current_participation,
+    );
     validators::apply_validators(state.validators_mut(), &delta.validators);
 
     recent_roots::apply_roots(base_slot, state.block_roots_mut(), &delta.block_roots);
     recent_roots::apply_roots(base_slot, state.state_roots_mut(), &delta.state_roots);
-    randao_mixes::apply_randao(
-        base_slot,
-        state.randao_mixes_mut(),
-        &delta.randao_mixes,
-        slots_per_epoch,
-    );
+    randao_mixes::apply_randao(base_slot, state.randao_mixes_mut(), &delta.randao_mixes);
     slashings::apply_slashings(state.slashings_mut(), &delta.slashings);
     inactivity_scores::apply_inactivity(state.inactivity_scores_mut(), &delta.inactivity_scores);
 
@@ -206,6 +207,7 @@ pub trait DiffSource {
 
     fn balances(&self) -> (&[u64], &[u64]);
     fn previous_participation(&self) -> (&[u8], &[u8]);
+    fn current_participation(&self) -> (&[u8], &[u8]);
     fn validators(&self) -> (&[u8], &[u8]);
 
     fn block_roots(&self) -> &[[u8; 32]];
@@ -238,6 +240,7 @@ pub trait DiffSource {
 pub fn create<R: DiffSource>(state: &R) -> BeaconStateDelta {
     let (base_balances, target_balances) = state.balances();
     let (base_prev_participation, target_prev_participation) = state.previous_participation();
+    let (base_curr_participation, target_curr_participation) = state.current_participation();
     let (base_validators, target_validators) = state.validators();
     let (base_inactivity, target_inactivity) = state.inactivity_scores();
     let (base_slashings, target_slashings) = state.slashings();
@@ -262,6 +265,10 @@ pub fn create<R: DiffSource>(state: &R) -> BeaconStateDelta {
             base_prev_participation,
             target_prev_participation,
         ),
+        current_participation: participation::diff_participation(
+            base_curr_participation,
+            target_curr_participation,
+        ),
         validators: validators::diff_validators(base_validators, target_validators),
 
         block_roots: recent_roots::diff_roots(base_slot, target_slot, state.block_roots()),
@@ -270,12 +277,7 @@ pub fn create<R: DiffSource>(state: &R) -> BeaconStateDelta {
             base_slot + slots_per_epoch,
             state.state_roots(),
         ),
-        randao_mixes: randao_mixes::diff_randao(
-            base_slot,
-            base_slot + slots_per_epoch,
-            state.randao_mixes(),
-            slots_per_epoch,
-        ),
+        randao_mixes: randao_mixes::diff_randao(base_slot, target_slot, state.randao_mixes()),
         slashings: slashings::diff_slashings(
             base_slot,
             base_slot + slots_per_epoch,
