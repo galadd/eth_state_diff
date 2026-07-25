@@ -26,6 +26,9 @@ pub mod sync_committee;
 pub mod types;
 pub mod validators;
 
+pub mod error;
+use error::Error;
+
 use rkyv::{Archive, Deserialize, Serialize};
 
 use crate::types::{
@@ -35,19 +38,20 @@ use crate::types::{
 
 /// Ethereum consensus fork supported by this delta.
 ///
-/// Deltas may only be applied to states from the same fork to ensure layout
-/// compatibility.
-#[derive(Archive, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+/// Explicit integer discriminants are assigned to allow strict invariant
+/// checking during delta creation.
+#[derive(Archive, Serialize, Deserialize, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[repr(u8)]
 pub enum ForkName {
-    Phase0,
-    Altair,
-    Bellatrix,
-    Capella,
-    Deneb,
-    Electra,
-    Fulu,
-    Gloas,
-    Heze,
+    Phase0 = 0,
+    Altair = 1,
+    Bellatrix = 2,
+    Capella = 3,
+    Deneb = 4,
+    Electra = 5,
+    Fulu = 6,
+    Gloas = 7,
+    Heze = 8,
 }
 
 /// Complete delta describing the transition between two beacon states.
@@ -137,25 +141,43 @@ pub trait DiffTarget {
 /// delta to reconstruct the target state.
 ///
 /// The state's fork must match the fork recorded in the delta.
-///
-/// # Panics
-///
-/// Panics if the delta was created for a different consensus fork.
-///
-/// # Complexity
-///
-/// Linear in the size of the recorded delta.
-pub fn apply<M: DiffTarget>(mut state: M, delta: &ArchivedBeaconStateDelta) -> M {
+pub fn apply<M: DiffTarget>(mut state: M, delta: &ArchivedBeaconStateDelta) -> Result<M, Error> {
     use rkyv::deserialize;
 
     let delta_fork: ForkName = deserialize::<ForkName, rkyv::rancor::Error>(&delta.fork)
-        .expect("failed to deserialize fork");
+        .map_err(|e| Error::MalformedDelta(format!("failed to deserialize fork: {e}")))?;
 
     let state_fork = state.get_fork();
-    assert_eq!(
-        state_fork, delta_fork,
-        "Fork mismatch: cannot apply {delta_fork:?} delta to {state_fork:?} state",
-    );
+    if state_fork != delta_fork {
+        return Err(Error::ForkMismatch {
+            state_fork,
+            delta_fork,
+        });
+    }
+
+    // Validate fork-specific fields.
+    macro_rules! validate_field {
+        ($field:ident, $fork:expr) => {
+            if delta.$field.is_some() && delta_fork < $fork {
+                return Err(Error::InvalidFieldForFork {
+                    field: stringify!($field),
+                    fork: delta_fork,
+                });
+            }
+        };
+    }
+
+    validate_field!(previous_participation, ForkName::Altair);
+    validate_field!(current_participation, ForkName::Altair);
+    validate_field!(inactivity_scores, ForkName::Altair);
+    validate_field!(current_sync_committee, ForkName::Altair);
+    validate_field!(next_sync_committee, ForkName::Altair);
+
+    validate_field!(historical_summaries, ForkName::Capella);
+
+    validate_field!(pending_deposits, ForkName::Electra);
+    validate_field!(pending_partial_withdrawals, ForkName::Electra);
+    validate_field!(pending_consolidations, ForkName::Electra);
 
     let base_slot = delta.base_slot.to_native();
 
@@ -233,7 +255,7 @@ pub fn apply<M: DiffTarget>(mut state: M, delta: &ArchivedBeaconStateDelta) -> M
         pending_queue::apply_queue(s, d, PENDING_CONSOLIDATION_SSZ_SIZE);
     }
 
-    state
+    Ok(state)
 }
 
 /// Read-only view of two beacon states.
@@ -315,7 +337,7 @@ pub trait DiffSource {
 pub fn create<R: DiffSource>(state: &R) -> BeaconStateDelta {
     let (base_slot, target_slot) = state.slot();
 
-    BeaconStateDelta {
+    let delta = BeaconStateDelta {
         fork: state.fork(),
         base_slot,
         scalar_header: state.scalar_header(),
@@ -374,5 +396,70 @@ pub fn create<R: DiffSource>(state: &R) -> BeaconStateDelta {
         pending_consolidations: state
             .pending_consolidations()
             .map(|(b, t)| pending_queue::diff_queue(b, t, PENDING_CONSOLIDATION_SSZ_SIZE)),
-    }
+    };
+
+    debug_assert_eq!(
+        delta.previous_participation.is_some(),
+        delta.fork >= ForkName::Altair,
+        "DiffSource bug: previous_participation must exist iff fork >= Altair (got {:?})",
+        delta.fork
+    );
+
+    debug_assert_eq!(
+        delta.current_participation.is_some(),
+        delta.fork >= ForkName::Altair,
+        "DiffSource bug: current_participation must exist iff fork >= Altair (got {:?})",
+        delta.fork
+    );
+
+    debug_assert_eq!(
+        delta.inactivity_scores.is_some(),
+        delta.fork >= ForkName::Altair,
+        "DiffSource bug: inactivity_scores must exist iff fork >= Altair (got {:?})",
+        delta.fork
+    );
+
+    debug_assert_eq!(
+        delta.current_sync_committee.is_some(),
+        delta.fork >= ForkName::Altair,
+        "DiffSource bug: current_sync_committee must exist iff fork >= Altair (got {:?})",
+        delta.fork
+    );
+
+    debug_assert_eq!(
+        delta.next_sync_committee.is_some(),
+        delta.fork >= ForkName::Altair,
+        "DiffSource bug: next_sync_committee must exist iff fork >= Altair (got {:?})",
+        delta.fork
+    );
+
+    debug_assert_eq!(
+        delta.historical_summaries.is_some(),
+        delta.fork >= ForkName::Capella,
+        "DiffSource bug: historical_summaries must exist iff fork >= Capella (got {:?})",
+        delta.fork
+    );
+
+    debug_assert_eq!(
+        delta.pending_deposits.is_some(),
+        delta.fork >= ForkName::Electra,
+        "DiffSource bug: pending_deposits must exist iff fork >= Electra (got {:?})",
+        delta.fork
+    );
+
+    debug_assert_eq!(
+        delta.pending_partial_withdrawals.is_some(),
+        delta.fork >= ForkName::Electra,
+        "DiffSource bug: pending_partial_withdrawals must exist iff fork >= Electra (got {:?})",
+        delta.fork
+    );
+
+    debug_assert_eq!(
+        delta.pending_consolidations.is_some(),
+        delta.fork >= ForkName::Electra,
+        "DiffSource bug: pending_consolidations must exist iff fork >= Electra (got {:?})",
+        delta.fork
+    );
+
+    delta
 }
