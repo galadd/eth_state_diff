@@ -103,7 +103,7 @@ pub struct BeaconStateDelta {
 }
 
 const PENDING_DEPOSIT_SSZ_SIZE: usize = 192;
-const PARTIAL_WITHDRAWAL_SSZ_SIZE: usize = 121;
+const PARTIAL_WITHDRAWAL_SSZ_SIZE: usize = 24;
 const PENDING_CONSOLIDATION_SSZ_SIZE: usize = 16;
 
 /// Mutable view of a beacon state.
