@@ -15,7 +15,7 @@
 
 pub mod balances;
 pub mod eth1_data_votes;
-pub mod historical_summaries;
+pub mod historical_log;
 pub mod inactivity_scores;
 pub mod participation;
 pub mod pending_queue;
@@ -32,8 +32,9 @@ use error::Error;
 use rkyv::{Archive, Deserialize, Serialize};
 
 use crate::types::{
-    BalancesDiff, Eth1DataVotesDiff, HistoricalSummariesDiff, InactivityDiff, ParticipationDiff,
+    BalancesDiff, Eth1DataVotesDiff, HistoricalLogDiff, InactivityDiff, ParticipationDiff,
     QueueDiff, RandaoDiff, RootsDiff, SlashingsDiff, SyncCommitteeDiff, ValidatorsDiff,
+    HISTORICAL_ROOTS_SSZ_SIZE, HISTORICAL_SUMMARIES_SSZ_SIZE,
 };
 
 /// Ethereum consensus fork supported by this delta.
@@ -74,6 +75,7 @@ pub struct BeaconStateDelta {
     pub randao_mixes: RandaoDiff,
     pub slashings: SlashingsDiff,
     pub eth1_data_votes: Eth1DataVotesDiff,
+    pub historical_roots: HistoricalLogDiff,
 
     // --- Altair+ ---
     /// `None` for Phase0. `Some` for Altair+.
@@ -85,7 +87,7 @@ pub struct BeaconStateDelta {
 
     // --- Capella+ ---
     /// `None` for pre-Capella. `Some` for Capella+.
-    pub historical_summaries: Option<HistoricalSummariesDiff>,
+    pub historical_summaries: Option<HistoricalLogDiff>,
 
     // --- Electra+ ---
     /// `None` for pre-Electra. `Some` for Electra+.
@@ -118,6 +120,7 @@ pub trait DiffTarget {
     fn randao_mixes_mut(&mut self) -> &mut [[u8; 32]];
     fn slashings_mut(&mut self) -> &mut [u64];
     fn eth1_data_votes_mut(&mut self) -> &mut Vec<u8>;
+    fn historical_roots_mut(&mut self) -> &mut Vec<u8>;
 
     // Altair+
     fn previous_participation_mut(&mut self) -> Option<&mut Vec<u8>>;
@@ -192,6 +195,8 @@ pub fn apply<M: DiffTarget>(mut state: M, delta: &ArchivedBeaconStateDelta) -> R
     slashings::apply_slashings(state.slashings_mut(), &delta.slashings);
     eth1_data_votes::apply_eth1_votes(state.eth1_data_votes_mut(), &delta.eth1_data_votes);
 
+    historical_log::apply_historical_log(state.historical_roots_mut(), &delta.historical_roots);
+
     if let (Some(s), Some(d)) = (
         state.previous_participation_mut(),
         delta.previous_participation.as_ref(),
@@ -231,7 +236,7 @@ pub fn apply<M: DiffTarget>(mut state: M, delta: &ArchivedBeaconStateDelta) -> R
         state.historical_summaries_mut(),
         delta.historical_summaries.as_ref(),
     ) {
-        historical_summaries::apply_historical_summaries(s, d);
+        historical_log::apply_historical_log(s, d);
     }
 
     if let (Some(s), Some(d)) = (
@@ -306,6 +311,7 @@ pub trait DiffSource {
     fn randao_mixes(&self) -> &[[u8; 32]];
     fn slashings(&self) -> (&[u64], &[u64]);
     fn eth1_data_votes(&self) -> (&[u8], &[u8]);
+    fn historical_roots(&self) -> &[u8];
 
     // Altair+
     fn previous_participation(&self) -> Option<(&[u8], &[u8])>;
@@ -315,7 +321,7 @@ pub trait DiffSource {
     fn next_sync_committee(&self) -> Option<(&[u8], &[u8])>;
 
     // Capella+
-    fn historical_summaries(&self) -> Option<(&[u8], &[u8])>;
+    fn historical_summaries(&self) -> Option<&[u8]>;
 
     // Electra+
     fn pending_deposits(&self) -> Option<(&[u8], &[u8])>;
@@ -358,6 +364,13 @@ pub fn create<R: DiffSource>(state: &R) -> BeaconStateDelta {
             state.eth1_data_votes().0,
             state.eth1_data_votes().1,
         ),
+        historical_roots: historical_log::diff_historical_log(
+            base_slot,
+            target_slot,
+            state.historical_roots(),
+            HISTORICAL_ROOTS_SSZ_SIZE,
+            None,
+        ),
 
         // Altair+
         previous_participation: state
@@ -377,12 +390,13 @@ pub fn create<R: DiffSource>(state: &R) -> BeaconStateDelta {
             .map(|(b, t)| sync_committee::diff_sync_committee(b, t)),
 
         // Capella+
-        historical_summaries: state.historical_summaries().map(|(_, t)| {
-            historical_summaries::diff_historical_summaries(
+        historical_summaries: state.historical_summaries().map(|t| {
+            historical_log::diff_historical_log(
                 base_slot,
                 target_slot,
                 t,
-                state.capella_fork_slot(),
+                HISTORICAL_SUMMARIES_SSZ_SIZE,
+                Some(state.capella_fork_slot()),
             )
         }),
 

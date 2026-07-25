@@ -5,6 +5,12 @@ pub const SLOTS_PER_EPOCH: u64 = 32;
 /// Size, in bytes, of an SSZ-serialized validator record.
 pub const VALIDATOR_SSZ_SIZE: usize = 121;
 
+/// Size, in bytes, of an SSZ-serialized historical root.
+pub const HISTORICAL_ROOTS_SSZ_SIZE: usize = 32;
+
+/// Size, in bytes, of an SSZ-serialized historical summary.
+pub const HISTORICAL_SUMMARIES_SSZ_SIZE: usize = 64;
+
 /// Protocol-defined withdrawability delay for non-slashed validators.
 pub const MIN_VALIDATOR_WITHDRAWABILITY_DELAY: u64 = 256;
 
@@ -230,11 +236,11 @@ pub enum SyncCommitteeDiff {
 
 /// Delta representation for the historical summaries list.
 ///
-/// Because historical summaries are appended strictly once every 8,192 slots,
-/// the number of new summaries between two slots is mathematically deterministic.
+/// Because historical summaries/roots are appended strictly once every 8,192 slots,
+/// the number of new summaries/roots between two slots is mathematically deterministic.
 /// This diff enforces that invariant rather than comparing byte lengths.
 #[derive(Archive, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
-pub enum HistoricalSummariesDiff {
+pub enum HistoricalLogDiff {
     /// The 8,192-slot boundary was not crossed.
     Unchanged,
     /// Contains the raw SSZ bytes of the new items (64 bytes each).
