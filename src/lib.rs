@@ -13,6 +13,7 @@
 //! Deltas are designed to serialize efficiently with `rkyv`, although the
 //! library itself remains serialization-agnostic.
 
+pub mod attestations;
 pub mod balances;
 pub mod eth1_data_votes;
 pub mod historical_log;
@@ -32,9 +33,9 @@ use error::Error;
 use rkyv::{Archive, Deserialize, Serialize};
 
 use crate::types::{
-    BalancesDiff, Eth1DataVotesDiff, HistoricalLogDiff, InactivityDiff, ParticipationDiff,
-    QueueDiff, RandaoDiff, RootsDiff, SlashingsDiff, SyncCommitteeDiff, ValidatorsDiff,
-    HISTORICAL_ROOTS_SSZ_SIZE, HISTORICAL_SUMMARIES_SSZ_SIZE,
+    AttestationsDiff, BalancesDiff, Eth1DataVotesDiff, HistoricalLogDiff, InactivityDiff,
+    ParticipationDiff, QueueDiff, RandaoDiff, RootsDiff, SlashingsDiff, SyncCommitteeDiff,
+    ValidatorsDiff, HISTORICAL_ROOTS_SSZ_SIZE, HISTORICAL_SUMMARIES_SSZ_SIZE,
 };
 
 /// Ethereum consensus fork supported by this delta.
@@ -75,7 +76,12 @@ pub struct BeaconStateDelta {
     pub randao_mixes: RandaoDiff,
     pub slashings: SlashingsDiff,
     pub eth1_data_votes: Eth1DataVotesDiff,
-    pub historical_roots: HistoricalLogDiff,
+    pub historical_roots: Option<HistoricalLogDiff>,
+
+    // --- Phase0 Specific ---
+    /// `Some` for Phase0. `None` for Altair+.
+    pub previous_epoch_attestations: Option<AttestationsDiff>,
+    pub current_epoch_attestations: Option<AttestationsDiff>,
 
     // --- Altair+ ---
     /// `None` for Phase0. `Some` for Altair+.
@@ -120,7 +126,11 @@ pub trait DiffTarget {
     fn randao_mixes_mut(&mut self) -> &mut [[u8; 32]];
     fn slashings_mut(&mut self) -> &mut [u64];
     fn eth1_data_votes_mut(&mut self) -> &mut Vec<u8>;
-    fn historical_roots_mut(&mut self) -> &mut Vec<u8>;
+    fn historical_roots_mut(&mut self) -> Option<&mut Vec<u8>>;
+
+    // Phase0 specific
+    fn previous_epoch_attestations_mut(&mut self) -> Option<&mut Vec<u8>>;
+    fn current_epoch_attestations_mut(&mut self) -> Option<&mut Vec<u8>>;
 
     // Altair+
     fn previous_participation_mut(&mut self) -> Option<&mut Vec<u8>>;
@@ -158,6 +168,17 @@ pub fn apply<M: DiffTarget>(mut state: M, delta: &ArchivedBeaconStateDelta) -> R
         });
     }
 
+    macro_rules! validate_removed_field {
+        ($field:ident, $removed_in:expr) => {
+            if delta.$field.is_some() && delta_fork >= $removed_in {
+                return Err(Error::InvalidFieldForFork {
+                    field: stringify!($field),
+                    fork: delta_fork,
+                });
+            }
+        };
+    }
+
     // Validate fork-specific fields.
     macro_rules! validate_field {
         ($field:ident, $fork:expr) => {
@@ -170,17 +191,27 @@ pub fn apply<M: DiffTarget>(mut state: M, delta: &ArchivedBeaconStateDelta) -> R
         };
     }
 
+    // Introduced in Altair+
     validate_field!(previous_participation, ForkName::Altair);
     validate_field!(current_participation, ForkName::Altair);
     validate_field!(inactivity_scores, ForkName::Altair);
     validate_field!(current_sync_committee, ForkName::Altair);
     validate_field!(next_sync_committee, ForkName::Altair);
 
+    // Introduced in Capella+
     validate_field!(historical_summaries, ForkName::Capella);
 
+    // Introduced in Electra+
     validate_field!(pending_deposits, ForkName::Electra);
     validate_field!(pending_partial_withdrawals, ForkName::Electra);
     validate_field!(pending_consolidations, ForkName::Electra);
+
+    // Removed in Altair
+    validate_removed_field!(previous_epoch_attestations, ForkName::Altair);
+    validate_removed_field!(current_epoch_attestations, ForkName::Altair);
+
+    // Removed in Capella
+    validate_removed_field!(historical_roots, ForkName::Capella);
 
     let base_slot = delta.base_slot.to_native();
 
@@ -195,7 +226,26 @@ pub fn apply<M: DiffTarget>(mut state: M, delta: &ArchivedBeaconStateDelta) -> R
     slashings::apply_slashings(state.slashings_mut(), &delta.slashings);
     eth1_data_votes::apply_eth1_votes(state.eth1_data_votes_mut(), &delta.eth1_data_votes);
 
-    historical_log::apply_historical_log(state.historical_roots_mut(), &delta.historical_roots);
+    if let (Some(s), Some(d)) = (
+        state.historical_roots_mut(),
+        delta.historical_roots.as_ref(),
+    ) {
+        historical_log::apply_historical_log(s, d);
+    }
+
+    if let (Some(s), Some(d)) = (
+        state.previous_epoch_attestations_mut(),
+        delta.previous_epoch_attestations.as_ref(),
+    ) {
+        attestations::apply_attestations(s, d);
+    }
+
+    if let (Some(s), Some(d)) = (
+        state.current_epoch_attestations_mut(),
+        delta.current_epoch_attestations.as_ref(),
+    ) {
+        attestations::apply_attestations(s, d);
+    }
 
     if let (Some(s), Some(d)) = (
         state.previous_participation_mut(),
@@ -311,7 +361,11 @@ pub trait DiffSource {
     fn randao_mixes(&self) -> &[[u8; 32]];
     fn slashings(&self) -> (&[u64], &[u64]);
     fn eth1_data_votes(&self) -> (&[u8], &[u8]);
-    fn historical_roots(&self) -> &[u8];
+    fn historical_roots(&self) -> Option<&[u8]>;
+
+    // Phase0
+    fn previous_epoch_attestations(&self) -> Option<(&[u8], &[u8])>;
+    fn current_epoch_attestations(&self) -> Option<(&[u8], &[u8])>;
 
     // Altair+
     fn previous_participation(&self) -> Option<(&[u8], &[u8])>;
@@ -364,13 +418,23 @@ pub fn create<R: DiffSource>(state: &R) -> BeaconStateDelta {
             state.eth1_data_votes().0,
             state.eth1_data_votes().1,
         ),
-        historical_roots: historical_log::diff_historical_log(
-            base_slot,
-            target_slot,
-            state.historical_roots(),
-            HISTORICAL_ROOTS_SSZ_SIZE,
-            None,
-        ),
+        historical_roots: state.historical_roots().map(|t| {
+            historical_log::diff_historical_log(
+                base_slot,
+                target_slot,
+                t,
+                HISTORICAL_ROOTS_SSZ_SIZE,
+                None,
+            )
+        }),
+
+        // Phase0
+        previous_epoch_attestations: state
+            .previous_epoch_attestations()
+            .map(|(b, t)| attestations::diff_attestations_replacement(b, t)),
+        current_epoch_attestations: state
+            .current_epoch_attestations()
+            .map(|(b, t)| attestations::diff_attestations_append(b, t)),
 
         // Altair+
         previous_participation: state

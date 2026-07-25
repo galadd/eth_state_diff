@@ -247,6 +247,18 @@ pub enum HistoricalLogDiff {
     Append(Vec<u8>),
 }
 
+/// Delta representation for Phase0 pending attestations.
+#[derive(Archive, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub enum AttestationsDiff {
+    /// The list did not change.
+    Unchanged,
+    /// New attestations were appended to the end of the list.
+    Append(Vec<u8>),
+    /// The list was entirely replaced (used for `previous_epoch_attestations`
+    /// when it becomes the old `current_epoch_attestations`).
+    FullReplacement(Vec<u8>),
+}
+
 #[derive(Eq, PartialEq, Debug, Clone, Default, Archive, Deserialize, Serialize)]
 pub struct BitTagVec {
     /// Packed storage containing four 2-bit tags per byte.
