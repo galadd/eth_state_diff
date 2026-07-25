@@ -228,6 +228,19 @@ pub enum SyncCommitteeDiff {
     FullReplacement(Vec<u8>),
 }
 
+/// Delta representation for the historical summaries list.
+///
+/// Because historical summaries are appended strictly once every 8,192 slots,
+/// the number of new summaries between two slots is mathematically deterministic.
+/// This diff enforces that invariant rather than comparing byte lengths.
+#[derive(Archive, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub enum HistoricalSummariesDiff {
+    /// The 8,192-slot boundary was not crossed.
+    Unchanged,
+    /// Contains the raw SSZ bytes of the new items (64 bytes each).
+    Append(Vec<u8>),
+}
+
 #[derive(Eq, PartialEq, Debug, Clone, Default, Archive, Deserialize, Serialize)]
 pub struct BitTagVec {
     /// Packed storage containing four 2-bit tags per byte.

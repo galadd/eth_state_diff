@@ -15,6 +15,7 @@
 
 pub mod balances;
 pub mod eth1_data_votes;
+pub mod historical_summaries;
 pub mod inactivity_scores;
 pub mod participation;
 pub mod pending_queue;
@@ -28,8 +29,8 @@ pub mod validators;
 use rkyv::{Archive, Deserialize, Serialize};
 
 use crate::types::{
-    BalancesDiff, Eth1DataVotesDiff, InactivityDiff, ParticipationDiff, QueueDiff, RandaoDiff,
-    RootsDiff, SlashingsDiff, SyncCommitteeDiff, ValidatorsDiff,
+    BalancesDiff, Eth1DataVotesDiff, HistoricalSummariesDiff, InactivityDiff, ParticipationDiff,
+    QueueDiff, RandaoDiff, RootsDiff, SlashingsDiff, SyncCommitteeDiff, ValidatorsDiff,
 };
 
 /// Ethereum consensus fork supported by this delta.
@@ -75,6 +76,8 @@ pub struct BeaconStateDelta {
     pub current_sync_committee: SyncCommitteeDiff,
     pub next_sync_committee: SyncCommitteeDiff,
 
+    pub historical_summaries: HistoricalSummariesDiff,
+
     pub pending_deposits: QueueDiff,
     pub pending_partial_withdrawals: QueueDiff,
     pub pending_consolidations: QueueDiff,
@@ -109,6 +112,8 @@ pub trait DiffTarget {
 
     fn current_sync_committee_mut(&mut self) -> &mut Vec<u8>;
     fn next_sync_committee_mut(&mut self) -> &mut Vec<u8>;
+
+    fn historical_summaries_mut(&mut self) -> &mut Vec<u8>;
 
     fn pending_deposits_mut(&mut self) -> &mut Vec<u8>;
     fn pending_partial_withdrawals_mut(&mut self) -> &mut Vec<u8>;
@@ -173,6 +178,11 @@ pub fn apply<M: DiffTarget>(mut state: M, delta: &ArchivedBeaconStateDelta) -> M
         &delta.next_sync_committee,
     );
 
+    historical_summaries::apply_historical_summaries(
+        state.historical_summaries_mut(),
+        &delta.historical_summaries,
+    );
+
     pending_queue::apply_queue(
         state.pending_deposits_mut(),
         &delta.pending_deposits,
@@ -219,6 +229,9 @@ pub trait DiffSource {
 
     fn current_sync_committee(&self) -> (&[u8], &[u8]);
     fn next_sync_committee(&self) -> (&[u8], &[u8]);
+
+    fn capella_fork_slot(&self) -> u64;
+    fn historical_summaries(&self) -> &[u8];
 
     fn pending_deposits(&self) -> (&[u8], &[u8]);
     fn pending_partial_withdrawals(&self) -> (&[u8], &[u8]);
@@ -290,6 +303,13 @@ pub fn create<R: DiffSource>(state: &R) -> BeaconStateDelta {
             target_curr_sync,
         ),
         next_sync_committee: sync_committee::diff_sync_committee(base_next_sync, target_next_sync),
+
+        historical_summaries: historical_summaries::diff_historical_summaries(
+            base_slot,
+            target_slot,
+            state.historical_summaries(),
+            state.capella_fork_slot(),
+        ),
 
         pending_deposits: pending_queue::diff_queue(
             base_pending_deposits,
