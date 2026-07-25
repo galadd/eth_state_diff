@@ -231,7 +231,7 @@ pub trait DiffSource {
     fn next_sync_committee(&self) -> (&[u8], &[u8]);
 
     fn capella_fork_slot(&self) -> u64;
-    fn historical_summaries(&self) -> &[u8];
+    fn historical_summaries(&self) -> (&[u8], &[u8]);
 
     fn pending_deposits(&self) -> (&[u8], &[u8]);
     fn pending_partial_withdrawals(&self) -> (&[u8], &[u8]);
@@ -259,6 +259,7 @@ pub fn create<R: DiffSource>(state: &R) -> BeaconStateDelta {
     let (base_eth1_data_votes, target_eth1_data_votes) = state.eth1_data_votes();
     let (base_curr_sync, target_curr_sync) = state.current_sync_committee();
     let (base_next_sync, target_next_sync) = state.next_sync_committee();
+    let (_, target_historical_summaries) = state.historical_summaries();
     let (base_pending_deposits, target_pending_deposits) = state.pending_deposits();
     let (base_pending_pw, target_pending_pw) = state.pending_partial_withdrawals();
     let (base_pending_consolidations, target_pending_consolidations) =
@@ -307,7 +308,7 @@ pub fn create<R: DiffSource>(state: &R) -> BeaconStateDelta {
         historical_summaries: historical_summaries::diff_historical_summaries(
             base_slot,
             target_slot,
-            state.historical_summaries(),
+            target_historical_summaries,
             state.capella_fork_slot(),
         ),
 
