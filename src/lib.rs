@@ -46,41 +46,48 @@ pub enum ForkName {
     Deneb,
     Electra,
     Fulu,
+    Gloas,
+    Heze,
 }
 
 /// Complete delta describing the transition between two beacon states.
 ///
-/// Each field uses a specialized encoding optimized for the corresponding
-/// consensus data structure.
-///
-/// A `BeaconStateDelta` can be serialized, persisted, transmitted, and later
-/// applied to a compatible base state to reconstruct the target state.
+/// Fields introduced in later forks are wrapped in `Option<T>`.
+/// A delta for Phase0 will have `None` for all Altair/Capella/Electra fields.
+/// `rkyv` serializes `None` as a single zero byte, meaning fork-incompatible
+/// fields add effectively zero size to the final compressed delta.
 #[derive(Archive, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct BeaconStateDelta {
     pub fork: ForkName,
     pub base_slot: u64,
     pub scalar_header: Vec<u8>,
 
+    // --- Universal (Phase0+) ---
     pub balances: BalancesDiff,
-    pub previous_participation: ParticipationDiff,
-    pub current_participation: ParticipationDiff,
     pub validators: ValidatorsDiff,
     pub block_roots: RootsDiff,
     pub state_roots: RootsDiff,
     pub randao_mixes: RandaoDiff,
     pub slashings: SlashingsDiff,
-    pub inactivity_scores: InactivityDiff,
-
     pub eth1_data_votes: Eth1DataVotesDiff,
 
-    pub current_sync_committee: SyncCommitteeDiff,
-    pub next_sync_committee: SyncCommitteeDiff,
+    // --- Altair+ ---
+    /// `None` for Phase0. `Some` for Altair+.
+    pub previous_participation: Option<ParticipationDiff>,
+    pub current_participation: Option<ParticipationDiff>,
+    pub inactivity_scores: Option<InactivityDiff>,
+    pub current_sync_committee: Option<SyncCommitteeDiff>,
+    pub next_sync_committee: Option<SyncCommitteeDiff>,
 
-    pub historical_summaries: HistoricalSummariesDiff,
+    // --- Capella+ ---
+    /// `None` for pre-Capella. `Some` for Capella+.
+    pub historical_summaries: Option<HistoricalSummariesDiff>,
 
-    pub pending_deposits: QueueDiff,
-    pub pending_partial_withdrawals: QueueDiff,
-    pub pending_consolidations: QueueDiff,
+    // --- Electra+ ---
+    /// `None` for pre-Electra. `Some` for Electra+.
+    pub pending_deposits: Option<QueueDiff>,
+    pub pending_partial_withdrawals: Option<QueueDiff>,
+    pub pending_consolidations: Option<QueueDiff>,
 }
 
 const PENDING_DEPOSIT_SSZ_SIZE: usize = 192;
@@ -94,30 +101,34 @@ const PENDING_CONSOLIDATION_SSZ_SIZE: usize = 16;
 ///
 /// The trait intentionally operates on primitive buffers and slices rather
 /// than client-specific types, allowing integration with any consensus client.
+/// Return `None` for fields that do not exist in the state's current fork.
 pub trait DiffTarget {
     fn get_fork(&self) -> ForkName;
     fn scalar_header_mut(&mut self) -> &mut Vec<u8>;
 
+    // Universal
     fn balances_mut(&mut self) -> &mut Vec<u64>;
-    fn previous_participation_mut(&mut self) -> &mut Vec<u8>;
-    fn current_participation_mut(&mut self) -> &mut Vec<u8>;
     fn validators_mut(&mut self) -> &mut Vec<u8>;
     fn block_roots_mut(&mut self) -> &mut [[u8; 32]];
     fn state_roots_mut(&mut self) -> &mut [[u8; 32]];
     fn randao_mixes_mut(&mut self) -> &mut [[u8; 32]];
     fn slashings_mut(&mut self) -> &mut [u64];
-    fn inactivity_scores_mut(&mut self) -> &mut Vec<u64>;
-
     fn eth1_data_votes_mut(&mut self) -> &mut Vec<u8>;
 
-    fn current_sync_committee_mut(&mut self) -> &mut Vec<u8>;
-    fn next_sync_committee_mut(&mut self) -> &mut Vec<u8>;
+    // Altair+
+    fn previous_participation_mut(&mut self) -> Option<&mut Vec<u8>>;
+    fn current_participation_mut(&mut self) -> Option<&mut Vec<u8>>;
+    fn inactivity_scores_mut(&mut self) -> Option<&mut Vec<u64>>;
+    fn current_sync_committee_mut(&mut self) -> Option<&mut Vec<u8>>;
+    fn next_sync_committee_mut(&mut self) -> Option<&mut Vec<u8>>;
 
-    fn historical_summaries_mut(&mut self) -> &mut Vec<u8>;
+    // Capella+
+    fn historical_summaries_mut(&mut self) -> Option<&mut Vec<u8>>;
 
-    fn pending_deposits_mut(&mut self) -> &mut Vec<u8>;
-    fn pending_partial_withdrawals_mut(&mut self) -> &mut Vec<u8>;
-    fn pending_consolidations_mut(&mut self) -> &mut Vec<u8>;
+    // Electra+
+    fn pending_deposits_mut(&mut self) -> Option<&mut Vec<u8>>;
+    fn pending_partial_withdrawals_mut(&mut self) -> Option<&mut Vec<u8>>;
+    fn pending_consolidations_mut(&mut self) -> Option<&mut Vec<u8>>;
 }
 
 /// Applies a previously created beacon-state delta.
@@ -150,54 +161,77 @@ pub fn apply<M: DiffTarget>(mut state: M, delta: &ArchivedBeaconStateDelta) -> M
 
     *state.scalar_header_mut() = delta.scalar_header.as_slice().to_vec();
 
+    // Universal
     balances::apply_balances(state.balances_mut(), &delta.balances);
-    participation::apply_participation(
-        state.previous_participation_mut(),
-        &delta.previous_participation,
-    );
-    participation::apply_participation(
-        state.current_participation_mut(),
-        &delta.current_participation,
-    );
     validators::apply_validators(state.validators_mut(), &delta.validators);
-
     recent_roots::apply_roots(base_slot, state.block_roots_mut(), &delta.block_roots);
     recent_roots::apply_roots(base_slot, state.state_roots_mut(), &delta.state_roots);
     randao_mixes::apply_randao(base_slot, state.randao_mixes_mut(), &delta.randao_mixes);
     slashings::apply_slashings(state.slashings_mut(), &delta.slashings);
-    inactivity_scores::apply_inactivity(state.inactivity_scores_mut(), &delta.inactivity_scores);
-
     eth1_data_votes::apply_eth1_votes(state.eth1_data_votes_mut(), &delta.eth1_data_votes);
 
-    sync_committee::apply_sync_committee(
+    if let (Some(s), Some(d)) = (
+        state.previous_participation_mut(),
+        delta.previous_participation.as_ref(),
+    ) {
+        participation::apply_participation(s, d);
+    }
+
+    if let (Some(s), Some(d)) = (
+        state.current_participation_mut(),
+        delta.current_participation.as_ref(),
+    ) {
+        participation::apply_participation(s, d);
+    }
+
+    if let (Some(s), Some(d)) = (
+        state.inactivity_scores_mut(),
+        delta.inactivity_scores.as_ref(),
+    ) {
+        inactivity_scores::apply_inactivity(s, d);
+    }
+
+    if let (Some(s), Some(d)) = (
         state.current_sync_committee_mut(),
-        &delta.current_sync_committee,
-    );
-    sync_committee::apply_sync_committee(
+        delta.current_sync_committee.as_ref(),
+    ) {
+        sync_committee::apply_sync_committee(s, d);
+    }
+
+    if let (Some(s), Some(d)) = (
         state.next_sync_committee_mut(),
-        &delta.next_sync_committee,
-    );
+        delta.next_sync_committee.as_ref(),
+    ) {
+        sync_committee::apply_sync_committee(s, d);
+    }
 
-    historical_summaries::apply_historical_summaries(
+    if let (Some(s), Some(d)) = (
         state.historical_summaries_mut(),
-        &delta.historical_summaries,
-    );
+        delta.historical_summaries.as_ref(),
+    ) {
+        historical_summaries::apply_historical_summaries(s, d);
+    }
 
-    pending_queue::apply_queue(
+    if let (Some(s), Some(d)) = (
         state.pending_deposits_mut(),
-        &delta.pending_deposits,
-        PENDING_DEPOSIT_SSZ_SIZE,
-    );
-    pending_queue::apply_queue(
+        delta.pending_deposits.as_ref(),
+    ) {
+        pending_queue::apply_queue(s, d, PENDING_DEPOSIT_SSZ_SIZE);
+    }
+
+    if let (Some(s), Some(d)) = (
         state.pending_partial_withdrawals_mut(),
-        &delta.pending_partial_withdrawals,
-        PARTIAL_WITHDRAWAL_SSZ_SIZE,
-    );
-    pending_queue::apply_queue(
+        delta.pending_partial_withdrawals.as_ref(),
+    ) {
+        pending_queue::apply_queue(s, d, PARTIAL_WITHDRAWAL_SSZ_SIZE);
+    }
+
+    if let (Some(s), Some(d)) = (
         state.pending_consolidations_mut(),
-        &delta.pending_consolidations,
-        PENDING_CONSOLIDATION_SSZ_SIZE,
-    );
+        delta.pending_consolidations.as_ref(),
+    ) {
+        pending_queue::apply_queue(s, d, PENDING_CONSOLIDATION_SSZ_SIZE);
+    }
 
     state
 }
@@ -209,33 +243,37 @@ pub fn apply<M: DiffTarget>(mut state: M, delta: &ArchivedBeaconStateDelta) -> M
 ///
 /// Each method exposes the state component required by the corresponding delta
 /// encoder without imposing any storage layout on the implementation.
+///
+/// Return `None` for fields that do not exist in the state's current fork.
 pub trait DiffSource {
     fn fork(&self) -> ForkName;
     fn slot(&self) -> (u64, u64);
     fn scalar_header(&self) -> Vec<u8>;
+    fn capella_fork_slot(&self) -> u64; // Needed for historical_summaries math
 
+    // Universal
     fn balances(&self) -> (&[u64], &[u64]);
-    fn previous_participation(&self) -> (&[u8], &[u8]);
-    fn current_participation(&self) -> (&[u8], &[u8]);
     fn validators(&self) -> (&[u8], &[u8]);
-
     fn block_roots(&self) -> &[[u8; 32]];
     fn state_roots(&self) -> &[[u8; 32]];
     fn randao_mixes(&self) -> &[[u8; 32]];
     fn slashings(&self) -> (&[u64], &[u64]);
-    fn inactivity_scores(&self) -> (&[u64], &[u64]);
-
     fn eth1_data_votes(&self) -> (&[u8], &[u8]);
 
-    fn current_sync_committee(&self) -> (&[u8], &[u8]);
-    fn next_sync_committee(&self) -> (&[u8], &[u8]);
+    // Altair+
+    fn previous_participation(&self) -> Option<(&[u8], &[u8])>;
+    fn current_participation(&self) -> Option<(&[u8], &[u8])>;
+    fn inactivity_scores(&self) -> Option<(&[u64], &[u64])>;
+    fn current_sync_committee(&self) -> Option<(&[u8], &[u8])>;
+    fn next_sync_committee(&self) -> Option<(&[u8], &[u8])>;
 
-    fn capella_fork_slot(&self) -> u64;
-    fn historical_summaries(&self) -> (&[u8], &[u8]);
+    // Capella+
+    fn historical_summaries(&self) -> Option<(&[u8], &[u8])>;
 
-    fn pending_deposits(&self) -> (&[u8], &[u8]);
-    fn pending_partial_withdrawals(&self) -> (&[u8], &[u8]);
-    fn pending_consolidations(&self) -> (&[u8], &[u8]);
+    // Electra+
+    fn pending_deposits(&self) -> Option<(&[u8], &[u8])>;
+    fn pending_partial_withdrawals(&self) -> Option<(&[u8], &[u8])>;
+    fn pending_consolidations(&self) -> Option<(&[u8], &[u8])>;
 }
 
 /// Creates a delta between two beacon states.
@@ -250,21 +288,6 @@ pub trait DiffSource {
 ///
 /// Linear in the size of the state components being compared.
 pub fn create<R: DiffSource>(state: &R) -> BeaconStateDelta {
-    let (base_balances, target_balances) = state.balances();
-    let (base_prev_participation, target_prev_participation) = state.previous_participation();
-    let (base_curr_participation, target_curr_participation) = state.current_participation();
-    let (base_validators, target_validators) = state.validators();
-    let (base_inactivity, target_inactivity) = state.inactivity_scores();
-    let (base_slashings, target_slashings) = state.slashings();
-    let (base_eth1_data_votes, target_eth1_data_votes) = state.eth1_data_votes();
-    let (base_curr_sync, target_curr_sync) = state.current_sync_committee();
-    let (base_next_sync, target_next_sync) = state.next_sync_committee();
-    let (_, target_historical_summaries) = state.historical_summaries();
-    let (base_pending_deposits, target_pending_deposits) = state.pending_deposits();
-    let (base_pending_pw, target_pending_pw) = state.pending_partial_withdrawals();
-    let (base_pending_consolidations, target_pending_consolidations) =
-        state.pending_consolidations();
-
     let (base_slot, target_slot) = state.slot();
 
     BeaconStateDelta {
@@ -272,60 +295,59 @@ pub fn create<R: DiffSource>(state: &R) -> BeaconStateDelta {
         base_slot,
         scalar_header: state.scalar_header(),
 
-        balances: balances::diff_balances(base_balances, target_balances),
-        previous_participation: participation::diff_participation(
-            base_prev_participation,
-            target_prev_participation,
-        ),
-        current_participation: participation::diff_participation(
-            base_curr_participation,
-            target_curr_participation,
-        ),
-        validators: validators::diff_validators(base_validators, target_validators),
-
+        // Universal
+        balances: balances::diff_balances(state.balances().0, state.balances().1),
+        validators: validators::diff_validators(state.validators().0, state.validators().1),
         block_roots: recent_roots::diff_roots(base_slot, target_slot, state.block_roots()),
         state_roots: recent_roots::diff_roots(base_slot, target_slot, state.state_roots()),
         randao_mixes: randao_mixes::diff_randao(base_slot, target_slot, state.randao_mixes()),
         slashings: slashings::diff_slashings(
             base_slot,
             target_slot,
-            base_slashings,
-            target_slashings,
+            state.slashings().0,
+            state.slashings().1,
         ),
-        inactivity_scores: inactivity_scores::diff_inactivity(base_inactivity, target_inactivity),
-
         eth1_data_votes: eth1_data_votes::diff_eth1_votes(
-            base_eth1_data_votes,
-            target_eth1_data_votes,
+            state.eth1_data_votes().0,
+            state.eth1_data_votes().1,
         ),
 
-        current_sync_committee: sync_committee::diff_sync_committee(
-            base_curr_sync,
-            target_curr_sync,
-        ),
-        next_sync_committee: sync_committee::diff_sync_committee(base_next_sync, target_next_sync),
+        // Altair+
+        previous_participation: state
+            .previous_participation()
+            .map(|(b, t)| participation::diff_participation(b, t)),
+        current_participation: state
+            .current_participation()
+            .map(|(b, t)| participation::diff_participation(b, t)),
+        inactivity_scores: state
+            .inactivity_scores()
+            .map(|(b, t)| inactivity_scores::diff_inactivity(b, t)),
+        current_sync_committee: state
+            .current_sync_committee()
+            .map(|(b, t)| sync_committee::diff_sync_committee(b, t)),
+        next_sync_committee: state
+            .next_sync_committee()
+            .map(|(b, t)| sync_committee::diff_sync_committee(b, t)),
 
-        historical_summaries: historical_summaries::diff_historical_summaries(
-            base_slot,
-            target_slot,
-            target_historical_summaries,
-            state.capella_fork_slot(),
-        ),
+        // Capella+
+        historical_summaries: state.historical_summaries().map(|(_, t)| {
+            historical_summaries::diff_historical_summaries(
+                base_slot,
+                target_slot,
+                t,
+                state.capella_fork_slot(),
+            )
+        }),
 
-        pending_deposits: pending_queue::diff_queue(
-            base_pending_deposits,
-            target_pending_deposits,
-            PENDING_DEPOSIT_SSZ_SIZE,
-        ),
-        pending_partial_withdrawals: pending_queue::diff_queue(
-            base_pending_pw,
-            target_pending_pw,
-            PARTIAL_WITHDRAWAL_SSZ_SIZE,
-        ),
-        pending_consolidations: pending_queue::diff_queue(
-            base_pending_consolidations,
-            target_pending_consolidations,
-            PENDING_CONSOLIDATION_SSZ_SIZE,
-        ),
+        // Electra+
+        pending_deposits: state
+            .pending_deposits()
+            .map(|(b, t)| pending_queue::diff_queue(b, t, PENDING_DEPOSIT_SSZ_SIZE)),
+        pending_partial_withdrawals: state
+            .pending_partial_withdrawals()
+            .map(|(b, t)| pending_queue::diff_queue(b, t, PARTIAL_WITHDRAWAL_SSZ_SIZE)),
+        pending_consolidations: state
+            .pending_consolidations()
+            .map(|(b, t)| pending_queue::diff_queue(b, t, PENDING_CONSOLIDATION_SSZ_SIZE)),
     }
 }
