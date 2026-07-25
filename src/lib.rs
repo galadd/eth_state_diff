@@ -248,8 +248,33 @@ pub fn apply<M: DiffTarget>(mut state: M, delta: &ArchivedBeaconStateDelta) -> M
 pub trait DiffSource {
     fn fork(&self) -> ForkName;
     fn slot(&self) -> (u64, u64);
-    fn scalar_header(&self) -> Vec<u8>;
     fn capella_fork_slot(&self) -> u64; // Needed for historical_summaries math
+
+    /// Returns the serialized SSZ bytes for consensus state fields that are
+    /// not covered by specialized diffing algorithms.
+    ///
+    /// # Required SSZ Layout
+    ///
+    /// To ensure deterministic reconstruction across clients, the bytes MUST
+    /// be concatenated in the exact order defined by the consensus spec for
+    /// the target state's fork. The fields generally include:
+    ///
+    /// - `genesis_time` (8 bytes)
+    /// - `genesis_validators_root` (32 bytes)
+    /// - `slot` (8 bytes)
+    /// - `fork` (Fork struct, variable bytes)
+    /// - `latest_block_header` (BeaconBlockHeader struct)
+    /// - `eth1_data` (Eth1Data struct)
+    /// - `eth1_deposit_index` (8 bytes)
+    /// - `justification_bits` (BitVector)
+    /// - Checkpoints: `previous_justified`, `current_justified`, `finalized`
+    /// - `latest_execution_payload_header` (ExecutionPayloadHeader struct)
+    /// - Electra+ scalar fields: `next_withdrawal_index`, `next_withdrawal_validator_index`,
+    ///   `deposit_requests_start_index`, `deposit_balance_to_consume`, etc.
+    ///
+    /// **Note:** Fields that have dedicated diffing algorithms (e.g., `balances`,
+    /// `historical_summaries`, `pending_deposits`) MUST NOT be included in this blob.
+    fn scalar_header(&self) -> Vec<u8>;
 
     // Universal
     fn balances(&self) -> (&[u64], &[u64]);
