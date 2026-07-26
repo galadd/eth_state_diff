@@ -26,15 +26,14 @@ impl fmt::Display for Error {
             } => {
                 write!(
                     f,
-                    "Fork mismatch: cannot apply {:?} delta to {:?} state",
-                    delta_fork, state_fork
+                    "Fork mismatch: cannot apply {delta_fork:?} delta to {state_fork:?} state",
                 )
             }
             Error::InvalidFieldForFork { field, fork } => {
-                write!(f, "Field '{}' is invalid for fork {:?}", field, fork)
+                write!(f, "Field '{field}' is invalid for fork {fork:?}")
             }
             Error::MalformedDelta(msg) => {
-                write!(f, "Malformed delta payload: {}", msg)
+                write!(f, "Malformed delta payload: {msg}")
             }
         }
     }

@@ -41,8 +41,7 @@ pub fn diff_historical_log(
 
     debug_assert!(
         target_ssz.len() >= required_bytes,
-        "Historical log math expects {} bytes, but target_ssz is too short",
-        required_bytes
+        "Historical log math expects {required_bytes} bytes, but target_ssz is too short",
     );
 
     let start_byte = target_ssz.len() - required_bytes;
