@@ -95,7 +95,7 @@ pub fn diff_attestations(base_ssz: &[u8], target_ssz: &[u8]) -> AttestationsDiff
 ///
 /// # Complexity
 ///
-/// - [`AttestationsDiff::Unchanged`]: O(1).
+/// - [`AttestationsDiff::Unchanged`][]: O(1).
 /// - [`AttestationsDiff::Append`]: O(k), where *k* is the number of appended bytes.
 /// - [`AttestationsDiff::FullReplacement`]: O(n), where *n* is the size of the replacement list.
 ///
