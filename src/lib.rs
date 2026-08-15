@@ -534,10 +534,10 @@ pub fn create<R: DiffSource>(state: &R) -> BeaconStateDelta {
         // Phase0
         previous_epoch_attestations: state
             .previous_epoch_attestations()
-            .map(|(b, t)| attestations::diff_attestations_replacement(b, t)),
+            .map(|(b, t)| attestations::diff_attestations(b, t)),
         current_epoch_attestations: state
             .current_epoch_attestations()
-            .map(|(b, t)| attestations::diff_attestations_append(b, t)),
+            .map(|(b, t)| attestations::diff_attestations(b, t)),
 
         // Altair+
         previous_participation: state
