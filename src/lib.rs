@@ -93,6 +93,11 @@ pub trait ListMutTarget<T: Copy> {
     /// Returns the current number of elements in the collection.
     fn len(&self) -> usize;
 
+    /// Returns `true` if the collection contains no elements.
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
     /// Returns mutable access to the element at `index`.
     ///
     /// Returns `None` if `index` is outside the current collection bounds.
