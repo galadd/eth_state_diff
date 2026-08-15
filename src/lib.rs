@@ -38,6 +38,104 @@ use crate::types::{
     ValidatorsDiff, HISTORICAL_ROOTS_SSZ_SIZE, HISTORICAL_SUMMARIES_SSZ_SIZE,
 };
 
+/// A mutable target for list-like collections of copyable values.
+///
+/// [`ListMutTarget`] provides the minimal interface required by the generic
+/// delta-application routines in this crate. It allows those routines to
+/// update consensus-state collections without requiring the collection to be
+/// backed by a contiguous `Vec`.
+///
+/// Implementations may use any underlying storage strategy, including
+/// contiguous buffers, persistent trees, or other client-specific data
+/// structures.
+///
+/// # Type parameter
+///
+/// `T` is the element type stored by the collection. It must implement
+/// [`Copy`] because delta application reads values from the encoded delta and
+/// writes them directly into the target collection.
+///
+/// # Required operations
+///
+/// An implementation must provide:
+///
+/// - [`len`](Self::len) to report the current number of elements.
+/// - [`get_mut`](Self::get_mut) to obtain mutable access to an existing
+///   element by index.
+/// - [`push`](Self::push) to append a newly decoded element.
+///
+/// # Example
+///
+/// The crate provides an implementation for `Vec<u64>` and `Vec<u8>`.
+///
+/// ```
+/// use eth_state_diff::ListMutTarget;
+///
+/// let mut values = vec![100u64, 200, 300];
+/// let target: &mut dyn ListMutTarget<u64> = &mut values;
+///
+/// *target.get_mut(1).unwrap() = 250;
+/// target.push(400);
+///
+/// assert_eq!(values, [100, 250, 300, 400]);
+/// ```
+///
+/// # Implementing for client-specific collections
+///
+/// Consensus clients with non-contiguous or tree-backed state can implement
+/// this trait to allow the generic delta algorithms to operate directly on
+/// their native collections, without first materializing the collection as a
+/// flat buffer.
+///
+/// Implementations should return `None` from [`get_mut`](Self::get_mut) when
+/// the requested index is outside the current collection bounds.
+pub trait ListMutTarget<T: Copy> {
+    /// Returns the current number of elements in the collection.
+    fn len(&self) -> usize;
+
+    /// Returns mutable access to the element at `index`.
+    ///
+    /// Returns `None` if `index` is outside the current collection bounds.
+    fn get_mut(&mut self, index: usize) -> Option<&mut T>;
+
+    /// Appends `value` to the end of the collection.
+    fn push(&mut self, value: T);
+}
+
+impl ListMutTarget<u64> for Vec<u64> {
+    #[inline]
+    fn len(&self) -> usize {
+        self.len()
+    }
+
+    #[inline]
+    fn get_mut(&mut self, index: usize) -> Option<&mut u64> {
+        self.as_mut_slice().get_mut(index)
+    }
+
+    #[inline]
+    fn push(&mut self, value: u64) {
+        self.push(value);
+    }
+}
+
+impl ListMutTarget<u8> for Vec<u8> {
+    #[inline]
+    fn len(&self) -> usize {
+        self.len()
+    }
+
+    #[inline]
+    fn get_mut(&mut self, index: usize) -> Option<&mut u8> {
+        self.as_mut_slice().get_mut(index)
+    }
+
+    #[inline]
+    fn push(&mut self, value: u8) {
+        self.push(value);
+    }
+}
+
 /// Ethereum consensus fork supported by this delta.
 ///
 /// Explicit integer discriminants are assigned to allow strict invariant
