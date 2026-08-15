@@ -94,8 +94,9 @@ use crate::types::{ArchivedRandaoDiff, RandaoDiff, SLOTS_PER_EPOCH};
 ///
 /// # Correctness
 ///
-/// The buffer capacity becomes part of the implicit encoding scheme because
-/// buffer indices are reconstructed using modulo arithmetic.
+/// The delta stores mixes in chronological epoch order rather than storing
+/// their circular-buffer indices. During application, indices are reconstructed
+/// using modulo arithmetic and the capacity of the destination buffer.
 ///
 /// The buffer used with [`apply_randao`] must therefore have the same capacity
 /// as `target_buffer`.
@@ -103,7 +104,7 @@ use crate::types::{ArchivedRandaoDiff, RandaoDiff, SLOTS_PER_EPOCH};
 /// # Example
 ///
 /// ```
-/// use eth_state_diff::randao::diff_randao;
+/// use eth_state_diff::randao_mixes::diff_randao;
 ///
 /// let base_slot = 0;
 /// let target_slot = 64;
@@ -112,9 +113,9 @@ use crate::types::{ArchivedRandaoDiff, RandaoDiff, SLOTS_PER_EPOCH};
 ///
 /// let delta = diff_randao(base_slot, target_slot, &target_buffer);
 ///
-/// // Slots 0 and 64 belong to different epochs, so the delta contains
-/// // one mix for each epoch in the inclusive range.
-/// assert_eq!(delta.mixes.len(), 2);
+/// // Slots 0 and 64 belong to epochs 0 and 2 respectively, so the delta
+/// // contains one mix for each epoch in the inclusive range 0..=2.
+/// assert_eq!(delta.mixes.len(), 3);
 /// ```
 ///
 /// # Complexity
@@ -187,7 +188,8 @@ pub fn diff_randao(base_slot: u64, target_slot: u64, target_buffer: &[[u8; 32]])
 /// # Example
 ///
 /// ```
-/// use eth_state_diff::randao::{apply_randao, diff_randao};
+/// use eth_state_diff::randao_mixes::{apply_randao, diff_randao};
+/// use eth_state_diff::types::ArchivedRandaoDiff;
 ///
 /// let base_slot = 0;
 /// let target_slot = 64;
@@ -198,8 +200,13 @@ pub fn diff_randao(base_slot: u64, target_slot: u64, target_buffer: &[[u8; 32]])
 ///
 /// let delta = diff_randao(base_slot, target_slot, &target_buffer);
 ///
+/// let bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&delta).unwrap();
+/// let archived = unsafe {
+///     rkyv::access_unchecked::<ArchivedRandaoDiff>(&bytes)
+/// };
+///
 /// let mut reconstructed = vec![[0u8; 32]; 4];
-/// apply_randao(base_slot, &mut reconstructed, &delta);
+/// apply_randao(base_slot, &mut reconstructed, archived);
 ///
 /// assert_eq!(reconstructed, target_buffer);
 /// ```

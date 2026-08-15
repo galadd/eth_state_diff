@@ -94,7 +94,7 @@ use crate::types::{ArchivedRootsDiff, RootsDiff};
 /// # Example
 ///
 /// ```
-/// use eth_state_diff::roots::diff_roots;
+/// use eth_state_diff::recent_roots::diff_roots;
 ///
 /// let mut target_buffer = vec![[0u8; 32]; 4];
 /// target_buffer[0] = [1u8; 32];
@@ -173,7 +173,8 @@ pub fn diff_roots(base_slot: u64, target_slot: u64, buffer: &[[u8; 32]]) -> Root
 /// # Example
 ///
 /// ```
-/// use eth_state_diff::roots::{apply_roots, diff_roots};
+/// use eth_state_diff::recent_roots::{apply_roots, diff_roots};
+/// use eth_state_diff::types::ArchivedRootsDiff;
 ///
 /// let mut target_buffer = vec![[0u8; 32]; 4];
 /// target_buffer[0] = [1u8; 32];
@@ -182,8 +183,13 @@ pub fn diff_roots(base_slot: u64, target_slot: u64, buffer: &[[u8; 32]]) -> Root
 ///
 /// let delta = diff_roots(0, 3, &target_buffer);
 ///
+/// let bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&delta).unwrap();
+/// let archived = unsafe {
+///     rkyv::access_unchecked::<ArchivedRootsDiff>(&bytes)
+/// };
+///
 /// let mut reconstructed = vec![[0u8; 32]; 4];
-/// apply_roots(0, &mut reconstructed, &delta);
+/// apply_roots(0, &mut reconstructed, archived);
 ///
 /// assert_eq!(reconstructed, target_buffer);
 /// ```

@@ -40,7 +40,7 @@ use crate::types::{ArchivedEth1DataVotesDiff, Eth1DataVotesDiff};
 /// # Example
 ///
 /// ```
-/// use eth_state_diff::eth1_votes::diff_eth1_votes;
+/// use eth_state_diff::eth1_data_votes::diff_eth1_votes;
 /// use eth_state_diff::types::Eth1DataVotesDiff;
 ///
 /// let base = b"AAAA";
@@ -89,7 +89,7 @@ pub fn diff_eth1_votes(base: &[u8], target: &[u8]) -> Eth1DataVotesDiff {
 /// # Example
 ///
 /// ```
-/// use eth_state_diff::eth1_votes::{apply_eth1_votes, diff_eth1_votes};
+/// use eth_state_diff::eth1_data_votes::{apply_eth1_votes, diff_eth1_votes};
 /// use eth_state_diff::types::ArchivedEth1DataVotesDiff;
 ///
 /// let mut base = b"AAAA".to_vec();

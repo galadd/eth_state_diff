@@ -174,7 +174,7 @@ fn find_chunk_aligned(haystack: &[u8], needle: &[u8], item_ssz_size: usize) -> O
 /// # Example
 ///
 /// ```
-/// # use eth_state_diff::fifo_queue::diff_queue;
+/// # use eth_state_diff::pending_queue::diff_queue;
 /// # use eth_state_diff::types::QueueDiff;
 ///
 /// const ITEM_SIZE: usize = 4;
@@ -274,7 +274,7 @@ pub fn diff_queue(base_ssz: &[u8], target_ssz: &[u8], item_ssz_size: usize) -> Q
 /// # Example
 ///
 /// ```
-/// # use eth_state_diff::fifo_queue::{apply_queue, diff_queue};
+/// # use eth_state_diff::pending_queue::{apply_queue, diff_queue};
 ///
 /// const ITEM_SIZE: usize = 4;
 ///
@@ -284,7 +284,7 @@ pub fn diff_queue(base_ssz: &[u8], target_ssz: &[u8], item_ssz_size: usize) -> Q
 /// let delta = diff_queue(&base, target, ITEM_SIZE);
 /// let archived = rkyv::to_bytes::<rkyv::rancor::Error>(&delta).unwrap();
 /// let archived = unsafe { rkyv::access_unchecked::<
-///     crate::types::ArchivedQueueDiff
+///     eth_state_diff::types::ArchivedQueueDiff
 /// >(&archived) };
 ///
 /// apply_queue(&mut base, archived, ITEM_SIZE);

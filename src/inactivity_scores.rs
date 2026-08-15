@@ -56,7 +56,7 @@ use crate::types::{ArchivedInactivityDiff, InactivityDiff};
 /// # Example
 ///
 /// ```
-/// use eth_state_diff::inactivity::diff_inactivity;
+/// use eth_state_diff::inactivity_scores::diff_inactivity;
 /// use eth_state_diff::types::InactivityDiff;
 ///
 /// let base = vec![10, 20, 30, 40];
@@ -78,7 +78,7 @@ use crate::types::{ArchivedInactivityDiff, InactivityDiff};
 /// zero values:
 ///
 /// ```
-/// use eth_state_diff::inactivity::diff_inactivity;
+/// use eth_state_diff::inactivity_scores::diff_inactivity;
 /// use eth_state_diff::types::InactivityDiff;
 ///
 /// let base = vec![10, 20, 30];
@@ -149,7 +149,7 @@ pub fn diff_inactivity(base: &[u64], target: &[u64]) -> InactivityDiff {
 /// # Example
 ///
 /// ```
-/// use eth_state_diff::inactivity::{apply_inactivity, diff_inactivity};
+/// use eth_state_diff::inactivity_scores::{apply_inactivity, diff_inactivity};
 /// use eth_state_diff::types::ArchivedInactivityDiff;
 ///
 /// let mut base = vec![10, 20, 30];
