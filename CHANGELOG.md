@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.1] - 2026-08-15
+
+### Added
+
+- Added documentation examples and doctests to match the current API.
+- Added comprehensive Rustdoc documentation across the public API and state
+  delta encoding modules.
+- Added detailed documentation for delta application errors and validation
+  behavior.
+- Added `ListMutTarget` for generic mutable access to list-like collections.
+- Added iterator-based diff and apply paths for balances, validators, and
+  participation, allowing clients to operate on existing iterators without
+  materializing dense collections.
+- Added comprehensive crate-level documentation covering architecture,
+  integration, serialization, fork handling, and performance.
+- Added detailed README documentation covering the library's architecture,
+  delta strategies, client integration, and performance model.
+
 ## [0.2.0] - 2026-07-26
 
 ### Breaking Changes
